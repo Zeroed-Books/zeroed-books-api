@@ -1,0 +1,9 @@
+# Builds
+target
+
+# Config files
+.devcontainer
+.vscode
+
+# The Dockerfile itself
+Dockerfile
