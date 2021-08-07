@@ -5,6 +5,7 @@ services:
             dockerfile: Dockerfile
 
         environment:
+            DATABASE_URL: postgres://postgres:password@postgres/postgres
             # Make rocket available outside the container.
             ROCKET_ADDRESS: "0.0.0.0"
 

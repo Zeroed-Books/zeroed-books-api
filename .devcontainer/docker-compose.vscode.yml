@@ -4,6 +4,10 @@ services:
             context: .
             dockerfile: .devcontainer/Dockerfile
 
+        environment:
+            DATABASE_URL: postgres://postgres:password@postgres/postgres
+            ROCKET_GLOBAL_DATABASES: "postgres = { url = \"postgres://postgres:password@postgres/postgres\" }"
+
         volumes:
             # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
             # mounts are relative to the first file in the list, which is a level up.
