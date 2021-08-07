@@ -11,6 +11,7 @@ table! {
 table! {
     user (id) {
         id -> Uuid,
+        password -> Text,
         created_at -> Timestamptz,
         last_login -> Nullable<Timestamptz>,
     }
