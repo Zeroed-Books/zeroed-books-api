@@ -5,8 +5,10 @@ services:
             dockerfile: .devcontainer/Dockerfile
 
         environment:
+            # Required for the `diesel` CLI to work.
             DATABASE_URL: postgres://postgres:password@postgres/postgres
-            ROCKET_GLOBAL_DATABASES: "postgres = { url = \"postgres://postgres:password@postgres/postgres\" }"
+            # Required for Rocket to connect to the database.
+            ROCKET_DATABASES: "{ postgres = { url = \"postgres://postgres:password@postgres/postgres\" } }"
 
         volumes:
             # Mounts the project folder to '/workspace'. While this file is in .devcontainer,

@@ -2,6 +2,7 @@
 extern crate rocket;
 
 use rocket_sync_db_pools::{database, diesel};
+use zeroed_books_api::create_user;
 
 #[database("postgres")]
 struct PostgresConn(diesel::PgConnection);
@@ -15,5 +16,5 @@ fn index(_conn: PostgresConn) -> &'static str {
 fn rocket() -> _ {
     rocket::build()
         .attach(PostgresConn::fairing())
-        .mount("/", routes![index])
+        .mount("/", routes![index, create_user])
 }
