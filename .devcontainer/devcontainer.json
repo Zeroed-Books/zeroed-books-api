@@ -2,10 +2,11 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.177.0/containers/rust
 {
 	"name": "Rust",
-	"dockerComposeFile": ["../docker-compose.base.yml", "./docker-compose.vscode.yml"],
-
+	"dockerComposeFile": [
+		"../docker-compose.base.yml",
+		"./docker-compose.vscode.yml"
+	],
 	"service": "vscode",
-
 	// Set *default* container specific settings.json values on container create.
 	"settings": {
 		"terminal.integrated.shell.linux": "/bin/bash",
@@ -16,19 +17,17 @@
 		},
 		"editor.formatOnSave": true
 	},
-
 	// Add the IDs of extensions you want installed when the container is created.
 	"extensions": [
 		"bungcip.better-toml",
+		"gruntfuggly.todo-tree",
 		"matklad.rust-analyzer",
 		"ms-azuretools.vscode-docker",
 		"mutantdino.resourcemonitor",
 		"patbenatar.advanced-new-file",
 		"vadimcn.vscode-lldb"
 	],
-
 	"workspaceFolder": "/workspace",
-
 	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode"
 }
