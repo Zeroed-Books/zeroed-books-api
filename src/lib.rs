@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate diesel;
 #[macro_use]
+extern crate diesel_migrations;
+#[macro_use]
 extern crate rocket;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
@@ -18,8 +20,10 @@ use uuid::Uuid;
 
 use crate::models::NewEmail;
 
+pub mod cli;
 pub mod models;
 pub mod schema;
+pub mod server;
 
 #[database("postgres")]
 pub struct PostgresConn(diesel::PgConnection);
