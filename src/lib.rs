@@ -7,6 +7,7 @@ extern crate rocket;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, RunQueryDsl};
+use email::Email;
 use models::NewUser;
 use rand_core::OsRng;
 use rocket::{
@@ -21,9 +22,10 @@ use uuid::Uuid;
 use crate::models::NewEmail;
 
 pub mod cli;
-pub mod models;
-pub mod schema;
-pub mod server;
+mod email;
+mod models;
+mod schema;
+mod server;
 
 #[database("postgres")]
 pub struct PostgresConn(diesel::PgConnection);
@@ -77,12 +79,19 @@ pub async fn create_user(
         password_hash: password_hash,
     };
 
-    let email_model = NewEmail {
-        provided_address: new_user.email.to_string(),
-        // TODO: Normalize email
-        normalized_address: new_user.email.to_string(),
-        user_id: new_user_id,
+    let email = match Email::parse(new_user.email) {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            return Err(ApiResponse {
+                value: Json(GenericError {
+                    message: "Invalid email address.".to_owned(),
+                }),
+                status: Status::BadRequest,
+            })
+        }
     };
+
+    let email_model = NewEmail::for_user(new_user_id, email);
 
     let persistance_result = db
         .run(move |c| persist_new_user(c, user_model, email_model))
@@ -122,7 +131,7 @@ fn persist_new_user(
         match insert_into(email::table).values(&email).execute(conn) {
             Ok(_) => Ok(()),
             Err(Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => Err(
-                EmailPersistanceError::DuplicateEmail(email.provided_address.to_string()),
+                EmailPersistanceError::DuplicateEmail(email.provided_address().to_string()),
             ),
             Err(err) => Err(EmailPersistanceError::DatabaseError(err)),
         }
