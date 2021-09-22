@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 argon2 = "0.2.2"
+async-trait = "0.1.51"
 diesel = { version = "1.4.7", features = ["postgres", "uuidv07"] }
 diesel_migrations = { version = "1.4.0", features = ["postgres"] }
 rand_core = { version = "0.6", features = ["std"] }
@@ -24,3 +25,7 @@ uuid = { version = "0.8.2", features = ["serde", "v4"]}
 version = "0.1.0-rc.1"
 default-features = false
 features = ["diesel_postgres_pool"]
+
+[dependencies.sendgrid]
+version = "0.17.3"
+features = ["async"]

@@ -1,3 +1,5 @@
+pub mod clients;
+
 #[derive(Debug, PartialEq)]
 pub struct Email {
     provided_address: String,

@@ -7,14 +7,17 @@ extern crate rocket;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, RunQueryDsl};
-use email::Email;
+use email::{
+    clients::{EmailClient, Message},
+    Email,
+};
 use models::NewUser;
 use rand_core::OsRng;
 use rocket::{
     http::{ContentType, Status},
     response::Responder,
     serde::{json::Json, Deserialize, Serialize},
-    Response,
+    Response, State,
 };
 use rocket_sync_db_pools::database;
 use uuid::Uuid;
@@ -63,6 +66,7 @@ impl<'r, 'o: 'r, T: Serialize> Responder<'r, 'o> for ApiResponse<T> {
 #[post("/users", data = "<new_user>")]
 pub async fn create_user(
     db: PostgresConn,
+    email_client: &State<Box<&dyn EmailClient>>,
     new_user: Json<NewUserRequest<'_>>,
 ) -> Result<Json<NewUserResponse>, ApiResponse<GenericError>> {
     let salt = SaltString::generate(&mut OsRng);
@@ -91,30 +95,70 @@ pub async fn create_user(
         }
     };
 
-    let email_model = NewEmail::for_user(new_user_id, email);
+    let email_model = NewEmail::for_user(new_user_id, &email);
 
     let persistance_result = db
         .run(move |c| persist_new_user(c, user_model, email_model))
         .await;
 
     match persistance_result {
-        Ok(()) => Ok(Json(NewUserResponse {
-            email: new_user.email.to_string(),
-        })),
-        // TODO: Send emails instead of leaking registration info.
-        Err(EmailPersistanceError::DuplicateEmail(_)) => Err(ApiResponse {
-            value: Json(GenericError {
-                message: "A user with that email already exists.".to_owned(),
-            }),
-            status: Status::BadRequest,
-        }),
-        Err(_) => Err(ApiResponse {
-            value: Json(GenericError {
-                message: "Internal server error.".to_owned(),
-            }),
-            status: Status::InternalServerError,
-        }),
-    }
+        Ok(_) => {
+            let message = Message {
+                // TODO: Pull from environment.
+                from: "no-reply@zeroedbooks.com".to_owned(),
+                to: email.provided_address().to_string(),
+                subject: "Please Confirm your Email".to_owned(),
+                text: "Please use magic to confirm your email address.".to_owned(),
+            };
+
+            match email_client.send(&message).await {
+                Ok(()) => (),
+                Err(()) => {
+                    return Err(ApiResponse {
+                        value: Json(GenericError {
+                            message: "Internal server error.".to_owned(),
+                        }),
+                        status: Status::InternalServerError,
+                    });
+                }
+            }
+        }
+        Err(EmailPersistanceError::DuplicateEmail(_)) => {
+            let message = Message {
+                // TODO: Pull from environment.
+                from: "no-reply@zeroedbooks.com".to_owned(),
+                to: email.provided_address().to_string(),
+                subject: "Duplicate Registration".to_owned(),
+                text: "There is already an account associated with this email.".to_owned(),
+            };
+
+            match email_client.send(&message).await {
+                Ok(()) => (),
+                Err(()) => {
+                    // TODO: Logging.
+                    return Err(ApiResponse {
+                        value: Json(GenericError {
+                            message: "Internal server error.".to_owned(),
+                        }),
+                        status: Status::InternalServerError,
+                    });
+                }
+            }
+        }
+        Err(e) => {
+            // TODO: Logging.
+            return Err(ApiResponse {
+                value: Json(GenericError {
+                    message: "Internal server error.".to_owned(),
+                }),
+                status: Status::InternalServerError,
+            });
+        }
+    };
+
+    Ok(Json(NewUserResponse {
+        email: new_user.email.to_string(),
+    }))
 }
 
 fn persist_new_user(
@@ -138,6 +182,7 @@ fn persist_new_user(
     })
 }
 
+#[derive(Debug)]
 enum EmailPersistanceError {
     DatabaseError(diesel::result::Error),
     DuplicateEmail(String),

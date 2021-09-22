@@ -14,7 +14,7 @@ pub struct NewEmail {
 }
 
 impl NewEmail {
-    pub fn for_user(user_id: Uuid, email: Email) -> Self {
+    pub fn for_user(user_id: Uuid, email: &Email) -> Self {
         Self {
             provided_address: email.provided_address().to_owned(),
             normalized_address: email.normalized_address().to_owned(),
