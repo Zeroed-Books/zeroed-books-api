@@ -10,3 +10,9 @@ with:
 ```console
 docker compose -f ./docker-compose.base.yml -f ./docker-compose.standalone.yml up
 ```
+
+## Environment Variables
+
+**`ROCKET_SENDGRID_KEY`:** An API token for Sendgrid. If this is provided,
+transactional emails will be sent using Sendgrid. If this is left empty, the
+default development setting of logging emails to the console is used.

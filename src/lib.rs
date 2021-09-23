@@ -66,7 +66,7 @@ impl<'r, 'o: 'r, T: Serialize> Responder<'r, 'o> for ApiResponse<T> {
 #[post("/users", data = "<new_user>")]
 pub async fn create_user(
     db: PostgresConn,
-    email_client: &State<Box<&dyn EmailClient>>,
+    email_client: &State<Box<dyn EmailClient>>,
     new_user: Json<NewUserRequest<'_>>,
 ) -> Result<Json<NewUserResponse>, ApiResponse<GenericError>> {
     let salt = SaltString::generate(&mut OsRng);
@@ -114,6 +114,7 @@ pub async fn create_user(
             match email_client.send(&message).await {
                 Ok(()) => (),
                 Err(()) => {
+                    // TODO: Log
                     return Err(ApiResponse {
                         value: Json(GenericError {
                             message: "Internal server error.".to_owned(),
@@ -145,7 +146,7 @@ pub async fn create_user(
                 }
             }
         }
-        Err(e) => {
+        Err(_) => {
             // TODO: Logging.
             return Err(ApiResponse {
                 value: Json(GenericError {
