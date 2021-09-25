@@ -7,9 +7,10 @@ extern crate rocket;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, RunQueryDsl};
-use email::{
-    clients::{EmailClient, Message},
-    Email,
+use email::clients::{EmailClient, Message};
+use identities::{
+    domain::email::Email,
+    models::email::{EmailPersistanceError, NewEmail},
 };
 use models::NewUser;
 use rand_core::OsRng;
@@ -23,10 +24,9 @@ use rocket_sync_db_pools::database;
 use tera::{Context, Tera};
 use uuid::Uuid;
 
-use crate::models::NewEmail;
-
 pub mod cli;
 mod email;
+mod identities;
 mod models;
 mod schema;
 mod server;
@@ -100,7 +100,7 @@ pub async fn create_user(
     let email_model = NewEmail::for_user(new_user_id, &email);
 
     let persistance_result = db
-        .run(move |c| persist_new_user(c, user_model, email_model))
+        .run(|c| persist_new_user(c, user_model, email_model))
         .await;
 
     match persistance_result {
@@ -169,39 +169,20 @@ pub async fn create_user(
     };
 
     Ok(Json(NewUserResponse {
-        email: new_user.email.to_string(),
+        email: email.provided_address().to_string(),
     }))
 }
 
-fn persist_new_user(
+fn persist_new_user<'a>(
     conn: &diesel::PgConnection,
     user: NewUser,
     email: NewEmail,
 ) -> Result<(), EmailPersistanceError> {
-    use crate::schema::{email, user};
-    use diesel::result::{DatabaseErrorKind, Error};
+    use crate::schema::user;
 
     conn.build_transaction().run(|| {
         insert_into(user::table).values(&user).execute(conn)?;
 
-        match insert_into(email::table).values(&email).execute(conn) {
-            Ok(_) => Ok(()),
-            Err(Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => Err(
-                EmailPersistanceError::DuplicateEmail(email.provided_address().to_string()),
-            ),
-            Err(err) => Err(EmailPersistanceError::DatabaseError(err)),
-        }
+        email.save(conn)
     })
-}
-
-#[derive(Debug)]
-enum EmailPersistanceError {
-    DatabaseError(diesel::result::Error),
-    DuplicateEmail(String),
-}
-
-impl From<diesel::result::Error> for EmailPersistanceError {
-    fn from(err: diesel::result::Error) -> Self {
-        EmailPersistanceError::DatabaseError(err)
-    }
 }
