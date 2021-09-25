@@ -1,5 +1,5 @@
 use rocket::{Build, Rocket};
-use serde::Deserialize;
+use tera::Tera;
 
 use crate::{
     create_user,
@@ -22,8 +22,14 @@ pub fn rocket() -> Rocket<Build> {
         Box::new(ConsoleMailer {})
     };
 
+    let tera = match Tera::new("templates/**/*") {
+        Ok(t) => t,
+        Err(e) => panic!("{}", e),
+    };
+
     rocket
         .attach(PostgresConn::fairing())
         .manage(email_client)
+        .manage(tera)
         .mount("/", routes![create_user])
 }

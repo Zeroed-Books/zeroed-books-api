@@ -20,6 +20,7 @@ use rocket::{
     Response, State,
 };
 use rocket_sync_db_pools::database;
+use tera::{Context, Tera};
 use uuid::Uuid;
 
 use crate::models::NewEmail;
@@ -67,6 +68,7 @@ impl<'r, 'o: 'r, T: Serialize> Responder<'r, 'o> for ApiResponse<T> {
 pub async fn create_user(
     db: PostgresConn,
     email_client: &State<Box<dyn EmailClient>>,
+    templates: &State<Tera>,
     new_user: Json<NewUserRequest<'_>>,
 ) -> Result<Json<NewUserResponse>, ApiResponse<GenericError>> {
     let salt = SaltString::generate(&mut OsRng);
@@ -103,12 +105,17 @@ pub async fn create_user(
 
     match persistance_result {
         Ok(_) => {
+            let content = templates
+                .render("emails/verify.txt", &Context::new())
+                .expect("template failure");
+
             let message = Message {
                 // TODO: Pull from environment.
                 from: "no-reply@zeroedbooks.com".to_owned(),
                 to: email.provided_address().to_string(),
                 subject: "Please Confirm your Email".to_owned(),
-                text: "Please use magic to confirm your email address.".to_owned(),
+                // TODO: Generate email verification codes
+                text: content,
             };
 
             match email_client.send(&message).await {
@@ -125,12 +132,16 @@ pub async fn create_user(
             }
         }
         Err(EmailPersistanceError::DuplicateEmail(_)) => {
+            let content = templates
+                .render("emails/duplicate.txt", &Context::new())
+                .expect("template failure");
+
             let message = Message {
                 // TODO: Pull from environment.
                 from: "no-reply@zeroedbooks.com".to_owned(),
                 to: email.provided_address().to_string(),
                 subject: "Duplicate Registration".to_owned(),
-                text: "There is already an account associated with this email.".to_owned(),
+                text: content,
             };
 
             match email_client.send(&message).await {
