@@ -1,3 +1,5 @@
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
+
 #[derive(Debug, PartialEq)]
 pub struct Email {
     provided_address: String,
@@ -40,6 +42,28 @@ impl Email {
 
     pub fn normalized_address(&self) -> &str {
         &self.normalized_address
+    }
+}
+
+const VERIFICATION_TOKEN_LENGTH: usize = 64;
+
+pub struct EmailVerification {
+    token: String,
+}
+
+impl EmailVerification {
+    pub fn new() -> Self {
+        let token: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(VERIFICATION_TOKEN_LENGTH)
+            .map(char::from)
+            .collect();
+
+        Self { token }
+    }
+
+    pub fn token(&self) -> &str {
+        &self.token
     }
 }
 

@@ -3,14 +3,18 @@ use diesel::{
 };
 use uuid::Uuid;
 
-use crate::{identities::domain::email::Email, schema::email};
+use crate::{
+    identities::domain::email::{Email, EmailVerification},
+    schema::{email, email_verification},
+};
 
 #[derive(Clone, Debug, Insertable)]
 #[table_name = "email"]
 pub struct NewEmail {
+    id: Uuid,
+    user_id: Uuid,
     provided_address: String,
     normalized_address: String,
-    user_id: Uuid,
 }
 
 impl NewEmail {
@@ -23,10 +27,15 @@ impl NewEmail {
     /// * `email` - The email address to persist.
     pub fn for_user(user_id: Uuid, email: &Email) -> Self {
         Self {
+            id: Uuid::new_v4(),
+            user_id,
             provided_address: email.provided_address().to_owned(),
             normalized_address: email.normalized_address().to_owned(),
-            user_id,
         }
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.id
     }
 
     pub fn provided_address(&self) -> &str {
@@ -56,5 +65,31 @@ pub enum EmailPersistanceError {
 impl From<diesel::result::Error> for EmailPersistanceError {
     fn from(err: diesel::result::Error) -> Self {
         EmailPersistanceError::DatabaseError(err)
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[table_name = "email_verification"]
+pub struct NewEmailVerification {
+    token: String,
+    email_id: Uuid,
+}
+
+impl NewEmailVerification {
+    pub fn new(email_id: Uuid, verification: &EmailVerification) -> Self {
+        Self {
+            token: verification.token().to_string(),
+            email_id,
+        }
+    }
+
+    pub fn save(&self, conn: &PgConnection) -> Result<(), DieselError> {
+        use crate::schema::email_verification::dsl::*;
+        use diesel::prelude::*;
+
+        insert_into(email_verification)
+            .values(self)
+            .execute(conn)
+            .map(|_| ())
     }
 }

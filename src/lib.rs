@@ -9,8 +9,8 @@ use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, RunQueryDsl};
 use email::clients::{EmailClient, Message};
 use identities::{
-    domain::email::Email,
-    models::email::{EmailPersistanceError, NewEmail},
+    domain::email::{Email, EmailVerification},
+    models::email::{EmailPersistanceError, NewEmail, NewEmailVerification},
 };
 use models::NewUser;
 use rand_core::OsRng;
@@ -98,65 +98,62 @@ pub async fn create_user(
     };
 
     let email_model = NewEmail::for_user(new_user_id, &email);
+    let new_email_id = email_model.id();
 
     let persistance_result = db
         .run(|c| persist_new_user(c, user_model, email_model))
         .await;
 
-    match persistance_result {
-        Ok(_) => {
-            let content = templates
-                .render("emails/verify.txt", &Context::new())
-                .expect("template failure");
+    if let Err(persistence_err) = persistance_result {
+        match persistence_err {
+            EmailPersistanceError::DuplicateEmail(_) => {
+                let content = templates
+                    .render("emails/duplicate.txt", &Context::new())
+                    .expect("template failure");
 
-            let message = Message {
-                // TODO: Pull from environment.
-                from: "no-reply@zeroedbooks.com".to_owned(),
-                to: email.provided_address().to_string(),
-                subject: "Please Confirm your Email".to_owned(),
-                // TODO: Generate email verification codes
-                text: content,
-            };
+                let message = Message {
+                    // TODO: Pull from environment.
+                    from: "no-reply@zeroedbooks.com".to_owned(),
+                    to: email.provided_address().to_string(),
+                    subject: "Duplicate Registration".to_owned(),
+                    text: content,
+                };
 
-            match email_client.send(&message).await {
-                Ok(()) => (),
-                Err(()) => {
-                    // TODO: Log
-                    return Err(ApiResponse {
-                        value: Json(GenericError {
-                            message: "Internal server error.".to_owned(),
-                        }),
-                        status: Status::InternalServerError,
-                    });
+                match email_client.send(&message).await {
+                    Ok(()) => {
+                        return Ok(Json(NewUserResponse {
+                            email: email.provided_address().to_string(),
+                        }))
+                    }
+                    Err(()) => {
+                        // TODO: Logging.
+                        return Err(ApiResponse {
+                            value: Json(GenericError {
+                                message: "Internal server error.".to_owned(),
+                            }),
+                            status: Status::InternalServerError,
+                        });
+                    }
                 }
             }
-        }
-        Err(EmailPersistanceError::DuplicateEmail(_)) => {
-            let content = templates
-                .render("emails/duplicate.txt", &Context::new())
-                .expect("template failure");
-
-            let message = Message {
-                // TODO: Pull from environment.
-                from: "no-reply@zeroedbooks.com".to_owned(),
-                to: email.provided_address().to_string(),
-                subject: "Duplicate Registration".to_owned(),
-                text: content,
-            };
-
-            match email_client.send(&message).await {
-                Ok(()) => (),
-                Err(()) => {
-                    // TODO: Logging.
-                    return Err(ApiResponse {
-                        value: Json(GenericError {
-                            message: "Internal server error.".to_owned(),
-                        }),
-                        status: Status::InternalServerError,
-                    });
-                }
+            _ => {
+                // TODO: Logging.
+                return Err(ApiResponse {
+                    value: Json(GenericError {
+                        message: "Internal server error.".to_owned(),
+                    }),
+                    status: Status::InternalServerError,
+                });
             }
         }
+    }
+
+    let verification = EmailVerification::new();
+    let verification_model = NewEmailVerification::new(new_email_id, &verification);
+
+    let verification_save_result = db.run(move |conn| verification_model.save(conn)).await;
+    match verification_save_result {
+        Ok(()) => (),
         Err(_) => {
             // TODO: Logging.
             return Err(ApiResponse {
@@ -167,6 +164,34 @@ pub async fn create_user(
             });
         }
     };
+
+    let mut verification_context = Context::new();
+    verification_context.insert("token", verification.token());
+
+    let content = templates
+        .render("emails/verify.txt", &verification_context)
+        .expect("template failure");
+
+    let message = Message {
+        // TODO: Pull from environment.
+        from: "no-reply@zeroedbooks.com".to_owned(),
+        to: email.provided_address().to_string(),
+        subject: "Please Confirm your Email".to_owned(),
+        text: content,
+    };
+
+    match email_client.send(&message).await {
+        Ok(()) => (),
+        Err(()) => {
+            // TODO: Log
+            return Err(ApiResponse {
+                value: Json(GenericError {
+                    message: "Internal server error.".to_owned(),
+                }),
+                status: Status::InternalServerError,
+            });
+        }
+    }
 
     Ok(Json(NewUserResponse {
         email: email.provided_address().to_string(),

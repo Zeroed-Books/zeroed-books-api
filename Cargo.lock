@@ -2395,6 +2395,7 @@ dependencies = [
  "async-trait",
  "diesel",
  "diesel_migrations",
+ "rand",
  "rand_core",
  "rocket",
  "rocket_sync_db_pools",

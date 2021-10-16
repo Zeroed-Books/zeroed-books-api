@@ -1,3 +1,5 @@
 Hello,
 
-Please use magic to confirm your email address.
+Please use the following token to verify your email address:
+
+{{ token }}
