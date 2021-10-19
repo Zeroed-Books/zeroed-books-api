@@ -5,6 +5,8 @@ extern crate diesel_migrations;
 #[macro_use]
 extern crate rocket;
 
+use std::net::IpAddr;
+
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, RunQueryDsl};
 use email::clients::{EmailClient, Message};
@@ -14,6 +16,7 @@ use identities::{
 };
 use models::NewUser;
 use rand_core::OsRng;
+use rate_limit::{RateLimitResult, RateLimiter};
 use rocket::{
     http::{ContentType, Status},
     response::Responder,
@@ -28,6 +31,7 @@ pub mod cli;
 mod email;
 mod identities;
 mod models;
+mod rate_limit;
 mod schema;
 mod server;
 
@@ -67,10 +71,36 @@ impl<'r, 'o: 'r, T: Serialize> Responder<'r, 'o> for ApiResponse<T> {
 #[post("/users", data = "<new_user>")]
 pub async fn create_user(
     db: PostgresConn,
+    // TODO: Handle client IPs behind proxy.
+    client_ip: IpAddr,
     email_client: &State<Box<dyn EmailClient>>,
+    rate_limiter: &State<Box<dyn RateLimiter>>,
     templates: &State<Tera>,
     new_user: Json<NewUserRequest<'_>>,
 ) -> Result<Json<NewUserResponse>, ApiResponse<GenericError>> {
+    let rate_limit_key = format!("/users_post_{}", client_ip.to_string());
+    match rate_limiter.is_limited(&rate_limit_key, 10) {
+        Ok(RateLimitResult::NotLimited) => (),
+        // TODO: Include rate limit expiration header.
+        Ok(RateLimitResult::LimitedUntil(_limit_expiration)) => {
+            return Err(ApiResponse {
+                value: Json(GenericError {
+                    message: "Too many requests.".to_string(),
+                }),
+                status: Status::TooManyRequests,
+            })
+        }
+        Err(err) => {
+            eprintln!("{:?}", err);
+            return Err(ApiResponse {
+                value: Json(GenericError {
+                    message: "Internal server error.".to_string(),
+                }),
+                status: Status::InternalServerError,
+            });
+        }
+    };
+
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 

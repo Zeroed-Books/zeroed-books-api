@@ -4,6 +4,7 @@ use tera::Tera;
 use crate::{
     create_user,
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
+    rate_limit::{RateLimiter, RedisRateLimiter},
     PostgresConn,
 };
 
@@ -27,9 +28,16 @@ pub fn rocket() -> Rocket<Build> {
         Err(e) => panic!("{}", e),
     };
 
+    let redis_uri: String = figment
+        .extract_inner("redis_url")
+        .expect("No REDIS_URL provided");
+    let rate_limiter: Box<dyn RateLimiter> =
+        Box::new(RedisRateLimiter::new(&redis_uri).expect("failed to create Redis rate limiter"));
+
     rocket
         .attach(PostgresConn::fairing())
         .manage(email_client)
+        .manage(rate_limiter)
         .manage(tera)
         .mount("/", routes![create_user])
 }
