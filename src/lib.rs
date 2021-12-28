@@ -10,6 +10,7 @@ use std::net::IpAddr;
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, RunQueryDsl};
 use email::clients::{EmailClient, Message};
+use http_err::ApiError;
 use identities::{
     domain::email::{Email, EmailVerification},
     models::email::{EmailPersistanceError, NewEmail, NewEmailVerification},
@@ -18,17 +19,19 @@ use models::NewUser;
 use rand_core::OsRng;
 use rate_limit::{RateLimitResult, RateLimiter};
 use rocket::{
-    http::{ContentType, Status},
     response::Responder,
     serde::{json::Json, Deserialize, Serialize},
-    Response, State,
+    State,
 };
 use rocket_sync_db_pools::database;
 use tera::{Context, Tera};
 use uuid::Uuid;
 
+use crate::http_err::InternalServerError;
+
 pub mod cli;
 mod email;
+mod http_err;
 mod identities;
 mod models;
 mod rate_limit;
@@ -49,23 +52,10 @@ pub struct NewUserResponse {
     email: String,
 }
 
-#[derive(Serialize)]
-pub struct GenericError {
-    pub message: String,
-}
-
-pub struct ApiResponse<T: Serialize> {
-    pub value: Json<T>,
-    pub status: Status,
-}
-
-impl<'r, 'o: 'r, T: Serialize> Responder<'r, 'o> for ApiResponse<T> {
-    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'o> {
-        Response::build_from(self.value.respond_to(request)?)
-            .status(self.status)
-            .header(ContentType::JSON)
-            .ok()
-    }
+#[derive(Responder)]
+pub enum CreateUserResponse {
+    #[response(status = 201)]
+    UserCreated(Json<NewUserResponse>),
 }
 
 #[post("/users", data = "<new_user>")]
@@ -77,27 +67,17 @@ pub async fn create_user(
     rate_limiter: &State<Box<dyn RateLimiter>>,
     templates: &State<Tera>,
     new_user: Json<NewUserRequest<'_>>,
-) -> Result<Json<NewUserResponse>, ApiResponse<GenericError>> {
+) -> Result<CreateUserResponse, ApiError> {
     let rate_limit_key = format!("/users_post_{}", client_ip.to_string());
     match rate_limiter.is_limited(&rate_limit_key, 10) {
         Ok(RateLimitResult::NotLimited) => (),
-        // TODO: Include rate limit expiration header.
-        Ok(RateLimitResult::LimitedUntil(_limit_expiration)) => {
-            return Err(ApiResponse {
-                value: Json(GenericError {
-                    message: "Too many requests.".to_string(),
-                }),
-                status: Status::TooManyRequests,
-            })
-        }
+        Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
         Err(err) => {
             eprintln!("{:?}", err);
-            return Err(ApiResponse {
-                value: Json(GenericError {
-                    message: "Internal server error.".to_string(),
-                }),
-                status: Status::InternalServerError,
-            });
+            return Err(InternalServerError {
+                message: "Internal server error.".to_string(),
+            }
+            .into());
         }
     };
 
@@ -118,12 +98,10 @@ pub async fn create_user(
     let email = match Email::parse(new_user.email) {
         Ok(parsed) => parsed,
         Err(_) => {
-            return Err(ApiResponse {
-                value: Json(GenericError {
-                    message: "Invalid email address.".to_owned(),
-                }),
-                status: Status::BadRequest,
-            })
+            return Err(InternalServerError {
+                message: "This should be a form error: Invalid email address.".to_owned(),
+            }
+            .into());
         }
     };
 
@@ -151,29 +129,25 @@ pub async fn create_user(
 
                 match email_client.send(&message).await {
                     Ok(()) => {
-                        return Ok(Json(NewUserResponse {
+                        return Ok(CreateUserResponse::UserCreated(Json(NewUserResponse {
                             email: email.provided_address().to_string(),
-                        }))
+                        })))
                     }
                     Err(()) => {
                         // TODO: Logging.
-                        return Err(ApiResponse {
-                            value: Json(GenericError {
-                                message: "Internal server error.".to_owned(),
-                            }),
-                            status: Status::InternalServerError,
-                        });
+                        return Err(InternalServerError {
+                            message: "Internal server error.".to_owned(),
+                        }
+                        .into());
                     }
                 }
             }
             _ => {
                 // TODO: Logging.
-                return Err(ApiResponse {
-                    value: Json(GenericError {
-                        message: "Internal server error.".to_owned(),
-                    }),
-                    status: Status::InternalServerError,
-                });
+                return Err(InternalServerError {
+                    message: "Internal server error.".to_owned(),
+                }
+                .into());
             }
         }
     }
@@ -186,12 +160,10 @@ pub async fn create_user(
         Ok(()) => (),
         Err(_) => {
             // TODO: Logging.
-            return Err(ApiResponse {
-                value: Json(GenericError {
-                    message: "Internal server error.".to_owned(),
-                }),
-                status: Status::InternalServerError,
-            });
+            return Err(InternalServerError {
+                message: "Internal server error.".to_owned(),
+            }
+            .into());
         }
     };
 
@@ -214,18 +186,16 @@ pub async fn create_user(
         Ok(()) => (),
         Err(()) => {
             // TODO: Log
-            return Err(ApiResponse {
-                value: Json(GenericError {
-                    message: "Internal server error.".to_owned(),
-                }),
-                status: Status::InternalServerError,
-            });
+            return Err(InternalServerError {
+                message: "Internal server error.".to_owned(),
+            }
+            .into());
         }
     }
 
-    Ok(Json(NewUserResponse {
+    Ok(CreateUserResponse::UserCreated(Json(NewUserResponse {
         email: email.provided_address().to_string(),
-    }))
+    })))
 }
 
 fn persist_new_user<'a>(

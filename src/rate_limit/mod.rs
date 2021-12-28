@@ -3,6 +3,12 @@ mod redis;
 use std::error::Error;
 
 use chrono::Utc;
+use rocket::{
+    http::Status,
+    response::Responder,
+    serde::{json::Json, Serialize},
+    Response,
+};
 
 pub use self::redis::RedisRateLimiter;
 
@@ -31,10 +37,41 @@ pub trait RateLimiter: Send + Sync {
     ) -> Result<RateLimitResult, Box<dyn Error>>;
 }
 
+#[derive(Debug)]
 pub enum RateLimitResult {
     /// The rate limit has not been exceeded.
     NotLimited,
     /// The rate limit has been exceeded. Requests will be accepted again at the
     /// contained timestamp.
     LimitedUntil(chrono::DateTime<Utc>),
+}
+
+#[derive(Serialize)]
+pub struct RateLimitResponse {
+    pub message: Option<String>,
+}
+
+impl From<RateLimitResult> for RateLimitResponse {
+    fn from(result: RateLimitResult) -> Self {
+        match result {
+            RateLimitResult::LimitedUntil(_time) => Self {
+                message: Some("Too many attempts. Please try again later.".to_string()),
+            },
+            RateLimitResult::NotLimited => Self { message: None },
+        }
+    }
+}
+
+impl<'r, 'o: 'r> Responder<'r, 'o> for RateLimitResult {
+    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'o> {
+        let response_status = match self {
+            Self::LimitedUntil(_time) => Status::TooManyRequests,
+            _ => Status::Ok,
+        };
+        let response_data: RateLimitResponse = self.into();
+
+        Response::build_from(Json(response_data).respond_to(request)?)
+            .status(response_status)
+            .ok()
+    }
 }

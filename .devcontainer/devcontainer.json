@@ -27,6 +27,9 @@
 		"patbenatar.advanced-new-file",
 		"vadimcn.vscode-lldb"
 	],
+	"features": {
+		"github-cli": "latest",
+	},
 	"workspaceFolder": "/workspace",
 	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode"
