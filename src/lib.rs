@@ -52,10 +52,17 @@ pub struct NewUserResponse {
     email: String,
 }
 
+#[derive(Serialize)]
+pub struct RegistrationError {
+    email: Option<Vec<String>>,
+}
+
 #[derive(Responder)]
 pub enum CreateUserResponse {
     #[response(status = 201)]
     UserCreated(Json<NewUserResponse>),
+    #[response(status = 400)]
+    BadRequest(Json<RegistrationError>),
 }
 
 #[post("/users", data = "<new_user>")]
@@ -98,10 +105,9 @@ pub async fn create_user(
     let email = match Email::parse(new_user.email) {
         Ok(parsed) => parsed,
         Err(_) => {
-            return Err(InternalServerError {
-                message: "This should be a form error: Invalid email address.".to_owned(),
-            }
-            .into());
+            return Ok(CreateUserResponse::BadRequest(Json(RegistrationError {
+                email: Some(vec!["Please enter a valid email address.".to_string()]),
+            })));
         }
     };
 
