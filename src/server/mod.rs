@@ -5,7 +5,7 @@ use crate::{
     create_user,
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
     rate_limit::{RateLimiter, RedisRateLimiter},
-    PostgresConn,
+    verify_email, PostgresConn,
 };
 
 pub fn rocket() -> Rocket<Build> {
@@ -39,5 +39,5 @@ pub fn rocket() -> Rocket<Build> {
         .manage(email_client)
         .manage(rate_limiter)
         .manage(tera)
-        .mount("/", routes![create_user])
+        .mount("/", routes![create_user, verify_email])
 }

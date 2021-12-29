@@ -8,6 +8,7 @@ extern crate rocket;
 use std::net::IpAddr;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use chrono::Duration;
 use diesel::{insert_into, RunQueryDsl};
 use email::clients::{EmailClient, Message};
 use http_err::ApiError;
@@ -216,4 +217,98 @@ fn persist_new_user<'a>(
 
         email.save(conn)
     })
+}
+
+#[derive(Deserialize)]
+pub struct EmailVerificationRequest {
+    token: String,
+}
+
+#[derive(Serialize)]
+pub struct EmailVerified {
+    email: String,
+}
+
+#[derive(Serialize)]
+pub struct VerificationError {
+    message: String,
+}
+
+#[derive(Responder)]
+pub enum EmailVerificationResponse {
+    #[response(status = 201)]
+    Verified(Json<EmailVerified>),
+    #[response(status = 400)]
+    BadRequest(Json<VerificationError>),
+}
+
+#[post("/email-verifications", data = "<verification_request>")]
+pub async fn verify_email(
+    db: PostgresConn,
+    verification_request: Json<EmailVerificationRequest>,
+) -> Result<EmailVerificationResponse, ApiError> {
+    let verification_result = db
+        .run(move |c| mark_email_as_verified(c, &verification_request.token))
+        .await;
+
+    match verification_result {
+        Ok(EmailVerificationResult::EmailVerified(address)) => {
+            Ok(EmailVerificationResponse::Verified(Json(EmailVerified {
+                email: address.to_string(),
+            })))
+        }
+        Ok(EmailVerificationResult::NotFound) => Ok(EmailVerificationResponse::BadRequest(Json(
+            VerificationError {
+                message: "The provided verification token is either invalid or has expired."
+                    .to_string(),
+            },
+        ))),
+        Err(_) => Err(InternalServerError {
+            message: "Internal server error.".to_string(),
+        }
+        .into()),
+    }
+}
+
+enum EmailVerificationResult {
+    EmailVerified(String),
+    NotFound,
+}
+
+fn mark_email_as_verified(
+    conn: &diesel::PgConnection,
+    token: &str,
+) -> Result<EmailVerificationResult, diesel::result::Error> {
+    use crate::schema::{email, email_verification};
+    use diesel::prelude::*;
+
+    let now = chrono::Utc::now();
+    let expiration = now - Duration::days(1);
+
+    let verification = email_verification::table.filter(
+        email_verification::token
+            .eq(token)
+            .and(email_verification::created_at.gt(expiration)),
+    );
+
+    let verified_address: Result<String, diesel::result::Error> = diesel::update(email::table)
+        .set(email::verified_at.eq(diesel::dsl::now))
+        .filter(email::id.eq_any(verification.select(email_verification::email_id)))
+        .returning(email::provided_address)
+        .get_result(conn);
+
+    match verified_address {
+        Ok(address) => {
+            let token_delete = diesel::delete(email_verification::table)
+                .filter(email_verification::token.eq(token))
+                .execute(conn);
+
+            match token_delete {
+                Ok(_) => Ok(EmailVerificationResult::EmailVerified(address)),
+                Err(err) => Err(err),
+            }
+        }
+        Err(diesel::NotFound) => Ok(EmailVerificationResult::NotFound),
+        Err(err) => Err(err),
+    }
 }
