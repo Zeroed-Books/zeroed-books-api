@@ -7,17 +7,18 @@ extern crate rocket;
 
 use std::net::IpAddr;
 
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use chrono::Duration;
 use diesel::{insert_into, RunQueryDsl};
 use email::clients::{EmailClient, Message};
 use http_err::ApiError;
 use identities::{
-    domain::email::{Email, EmailVerification},
+    domain::{
+        email::{Email, EmailVerification},
+        users::NewUser,
+    },
     models::email::{EmailPersistanceError, NewEmail, NewEmailVerification},
 };
-use models::NewUser;
-use rand_core::OsRng;
+use models::NewUserModel;
 use rate_limit::{RateLimitResult, RateLimiter};
 use rocket::{
     response::Responder,
@@ -27,7 +28,6 @@ use rocket::{
 use rocket_sync_db_pools::database;
 use tera::{Context, Tera};
 use tracing::{error, trace};
-use uuid::Uuid;
 
 use crate::http_err::InternalServerError;
 
@@ -67,21 +67,22 @@ pub enum CreateUserResponse {
     BadRequest(Json<RegistrationError>),
 }
 
-#[post("/users", data = "<new_user>")]
+#[post("/users", data = "<new_user_data>")]
 pub async fn create_user(
     db: PostgresConn,
     client_ip: IpAddr,
     email_client: &State<Box<dyn EmailClient>>,
     rate_limiter: &State<Box<dyn RateLimiter>>,
     templates: &State<Tera>,
-    new_user: Json<NewUserRequest<'_>>,
+    new_user_data: Json<NewUserRequest<'_>>,
 ) -> Result<CreateUserResponse, ApiError> {
     let rate_limit_key = format!("/users_post_{}", client_ip.to_string());
     match rate_limiter.is_limited(&rate_limit_key, 10) {
         Ok(RateLimitResult::NotLimited) => (),
         Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
         Err(err) => {
-            eprintln!("{:?}", err);
+            error!(error = ?err, "Failed to query rate limiter.");
+
             return Err(InternalServerError {
                 message: "Internal server error.".to_string(),
             }
@@ -89,21 +90,19 @@ pub async fn create_user(
         }
     };
 
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
+    let new_user = match NewUser::new(new_user_data.password) {
+        Ok(user) => user,
+        Err(error) => {
+            error!(?error, "Failed to create new user.");
 
-    let password_hash = argon2
-        .hash_password_simple(new_user.password.as_bytes(), salt.as_ref())
-        .unwrap()
-        .to_string();
-
-    let new_user_id = Uuid::new_v4();
-    let user_model = NewUser {
-        id: new_user_id,
-        password_hash: password_hash,
+            return Err(InternalServerError {
+                message: "Internal server error.".to_string(),
+            }
+            .into());
+        }
     };
 
-    let email = match Email::parse(new_user.email) {
+    let email = match Email::parse(new_user_data.email) {
         Ok(parsed) => parsed,
         Err(_) => {
             return Ok(CreateUserResponse::BadRequest(Json(RegistrationError {
@@ -112,11 +111,11 @@ pub async fn create_user(
         }
     };
 
-    let email_model = NewEmail::for_user(new_user_id, &email);
+    let email_model = NewEmail::for_user(new_user.id(), &email);
     let new_email_id = email_model.id();
 
     let persistance_result = db
-        .run(|c| persist_new_user(c, user_model, email_model))
+        .run(|c| persist_new_user(c, new_user.into(), email_model))
         .await;
 
     if let Err(persistence_err) = persistance_result {
@@ -216,7 +215,7 @@ pub async fn create_user(
 
 fn persist_new_user<'a>(
     conn: &diesel::PgConnection,
-    user: NewUser,
+    user: NewUserModel,
     email: NewEmail,
 ) -> Result<(), EmailPersistanceError> {
     use crate::schema::user;
