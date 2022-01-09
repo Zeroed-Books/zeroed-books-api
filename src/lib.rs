@@ -26,6 +26,7 @@ use rocket::{
 };
 use rocket_sync_db_pools::database;
 use tera::{Context, Tera};
+use tracing::{error, trace};
 use uuid::Uuid;
 
 use crate::http_err::InternalServerError;
@@ -140,8 +141,12 @@ pub async fn create_user(
                             email: email.provided_address().to_string(),
                         })))
                     }
-                    Err(()) => {
-                        // TODO: Logging.
+                    Err(e) => {
+                        error!(
+                            error = e.as_ref(),
+                            "Failed to send duplicate registration email."
+                        );
+
                         return Err(InternalServerError {
                             message: "Internal server error.".to_owned(),
                         }
@@ -165,8 +170,12 @@ pub async fn create_user(
     let verification_save_result = db.run(move |conn| verification_model.save(conn)).await;
     match verification_save_result {
         Ok(()) => (),
-        Err(_) => {
-            // TODO: Logging.
+        Err(err) => {
+            error!(
+                error = ?err,
+                "Failed to save email verification model."
+            );
+
             return Err(InternalServerError {
                 message: "Internal server error.".to_owned(),
             }
@@ -191,8 +200,9 @@ pub async fn create_user(
 
     match email_client.send(&message).await {
         Ok(()) => (),
-        Err(()) => {
-            // TODO: Log
+        Err(e) => {
+            error!(error = e.as_ref(), "Failed to send verification email.");
+
             return Err(InternalServerError {
                 message: "Internal server error.".to_owned(),
             }
@@ -263,10 +273,14 @@ pub async fn verify_email(
                     .to_string(),
             },
         ))),
-        Err(_) => Err(InternalServerError {
-            message: "Internal server error.".to_string(),
+        Err(err) => {
+            error!(error = ?err, "Failed to verify email.");
+
+            Err(InternalServerError {
+                message: "Internal server error.".to_string(),
+            }
+            .into())
         }
-        .into()),
     }
 }
 
@@ -284,6 +298,8 @@ fn mark_email_as_verified(
 
     let now = chrono::Utc::now();
     let expiration = now - Duration::days(1);
+
+    trace!(%now, %expiration, "Verifying email address.");
 
     let verification = email_verification::table.filter(
         email_verification::token

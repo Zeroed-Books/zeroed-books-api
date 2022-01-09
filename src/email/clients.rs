@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use sendgrid::v3::{Content, Email, Sender};
 
 pub struct Message {
@@ -22,14 +24,14 @@ impl From<&Message> for sendgrid::v3::Message {
 
 #[async_trait]
 pub trait EmailClient: Send + Sync {
-    async fn send(&self, message: &Message) -> Result<(), ()>;
+    async fn send(&self, message: &Message) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct ConsoleMailer();
 
 #[async_trait]
 impl EmailClient for ConsoleMailer {
-    async fn send(&self, message: &Message) -> Result<(), ()> {
+    async fn send(&self, message: &Message) -> Result<(), Box<dyn Error>> {
         println!("From: {}", message.from);
         println!("To: {}", message.to);
         println!("Subject: {}", message.subject);
@@ -54,14 +56,10 @@ impl SendgridMailer {
 
 #[async_trait]
 impl EmailClient for SendgridMailer {
-    async fn send(&self, message: &Message) -> Result<(), ()> {
+    async fn send(&self, message: &Message) -> Result<(), Box<dyn Error>> {
         match self.sender.send(&message.into()).await {
             Ok(_) => Ok(()),
-            Err(e) => {
-                eprintln!("error sending message: {:?}", e);
-
-                Err(())
-            }
+            Err(e) => Err(Box::new(e)),
         }
     }
 }

@@ -22,7 +22,10 @@
             "args": [
                 "serve"
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "info,zeroed_books_api=trace"
+            }
         },
         {
             "type": "lldb",
