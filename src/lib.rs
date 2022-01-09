@@ -70,7 +70,6 @@ pub enum CreateUserResponse {
 #[post("/users", data = "<new_user>")]
 pub async fn create_user(
     db: PostgresConn,
-    // TODO: Handle client IPs behind proxy.
     client_ip: IpAddr,
     email_client: &State<Box<dyn EmailClient>>,
     rate_limiter: &State<Box<dyn RateLimiter>>,

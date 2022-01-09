@@ -19,3 +19,9 @@ used as the backing store for rate limiting.
 **`ROCKET_SENDGRID_KEY`:** An API token for Sendgrid. If this is provided,
 transactional emails will be sent using Sendgrid. If this is left empty, the
 default development setting of logging emails to the console is used.
+
+## Deployment
+
+If the application is running behind a proxy, ensure that the proxy populates
+the `X-Real-IP` header for the request. If this is not done, all requests will
+originate from the same IP resulting in frequent rate limiting.
