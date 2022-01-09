@@ -40,4 +40,5 @@ pub fn rocket() -> Rocket<Build> {
         .manage(rate_limiter)
         .manage(tera)
         .mount("/", routes![create_user, verify_email])
+        .mount("/authentication", crate::authentication::http::routes())
 }

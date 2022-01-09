@@ -31,6 +31,7 @@ use tracing::{error, trace};
 
 use crate::http_err::InternalServerError;
 
+pub mod authentication;
 pub mod cli;
 mod email;
 mod http_err;
