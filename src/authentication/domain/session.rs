@@ -1,5 +1,11 @@
 use anyhow::Result;
+use rocket::{
+    http::Status,
+    request::{FromRequest, Outcome},
+    Request,
+};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -39,5 +45,33 @@ impl Session {
 
     pub fn user_id(&self) -> Uuid {
         self.user_id
+    }
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for Session {
+    type Error = ();
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        if let Some(session_cookie) = request.cookies().get_private("session") {
+            match serde_json::from_str::<Session>(session_cookie.value()) {
+                Ok(session) => {
+                    debug!(user_id = %session.user_id(), session_id = %session.id(), "Parsed cookie session.");
+
+                    Outcome::Success(session)
+                }
+                Err(error) => {
+                    warn!(
+                        ?error,
+                        value = session_cookie.value(),
+                        "Received malformed session value."
+                    );
+
+                    Outcome::Failure((Status::Unauthorized, ()))
+                }
+            }
+        } else {
+            Outcome::Failure((Status::Unauthorized, ()))
+        }
     }
 }

@@ -19,7 +19,7 @@ use crate::{
 use super::{domain::session::Session, models::User};
 
 pub fn routes() -> Vec<Route> {
-    routes![create_cookie_session]
+    routes![create_cookie_session, protected]
 }
 
 #[derive(Deserialize)]
@@ -117,4 +117,9 @@ async fn create_cookie_session(
             Err(InternalServerError::default().into())
         }
     }
+}
+
+#[get("/protected")]
+async fn protected(session: Session) -> &'static str {
+    "Some protected value."
 }
