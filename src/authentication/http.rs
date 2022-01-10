@@ -69,7 +69,14 @@ async fn create_cookie_session(
     let user_email = credentials.email.clone();
     let user_query = db.run(move |conn| User::by_email(conn, &user_email)).await;
     let user_model = match user_query {
-        Ok(user) => user,
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            return Ok(CreateSessionResponse::BadRequest(Json(
+                SessionCreationError {
+                    message: "Invalid email or password.".to_string(),
+                },
+            )))
+        }
         Err(error) => {
             error!(?error, "Error finding user by email.");
 

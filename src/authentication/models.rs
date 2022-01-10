@@ -1,5 +1,5 @@
 use anyhow::Result;
-use diesel::{dsl::Filter, PgConnection, Queryable};
+use diesel::{result::DatabaseErrorKind, PgConnection, Queryable};
 use uuid::Uuid;
 
 #[derive(Debug, Queryable)]
@@ -10,15 +10,20 @@ pub struct User {
 }
 
 impl User {
-    pub fn by_email(conn: &PgConnection, email: &str) -> Result<Self> {
+    pub fn by_email(conn: &PgConnection, email: &str) -> Result<Option<Self>> {
         use crate::schema::{email, user};
         use diesel::prelude::*;
 
         user::table
             .select((user::id, user::password))
             .inner_join(email::table)
-            .filter(email::verified_at.is_not_null())
+            .filter(
+                email::provided_address
+                    .eq(email)
+                    .and(email::verified_at.is_not_null()),
+            )
             .first::<Self>(conn)
+            .optional()
             .map_err(|err| anyhow::Error::from(err))
     }
 }
