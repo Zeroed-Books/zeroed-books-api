@@ -7,4 +7,6 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 USER vscode
 RUN cargo install diesel_cli --no-default-features --features postgres \
-    && echo 'eval "$(diesel completions bash)"' >> $HOME/.bashrc
+    && echo 'eval "$(diesel completions bash)"' >> $HOME/.bashrc \
+    && sudo mkdir -p /usr/share/zsh/vendor-functions \
+    && diesel completions zsh | sudo tee /usr/share/zsh/vendor-functions/_diesel
