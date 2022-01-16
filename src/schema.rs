@@ -29,8 +29,4 @@ table! {
 joinable!(email -> user (user_id));
 joinable!(email_verification -> email (email_id));
 
-allow_tables_to_appear_in_same_query!(
-    email,
-    email_verification,
-    user,
-);
+allow_tables_to_appear_in_same_query!(email, email_verification, user,);
