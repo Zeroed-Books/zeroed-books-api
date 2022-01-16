@@ -1,3 +1,8 @@
+// We often use a `new` constructor with required arguments to ensure that only
+// structs with valid data can be created. A default implementation would avoid
+// this benefit we get from the type system.
+#![allow(clippy::new_without_default)]
+
 #[macro_use]
 extern crate diesel;
 #[macro_use]
@@ -214,7 +219,7 @@ pub async fn create_user(
     })))
 }
 
-fn persist_new_user<'a>(
+fn persist_new_user(
     conn: &diesel::PgConnection,
     user: NewUserModel,
     email: NewEmail,
@@ -263,7 +268,7 @@ pub async fn verify_email(
     match verification_result {
         Ok(EmailVerificationResult::EmailVerified(address)) => {
             Ok(EmailVerificationResponse::Verified(Json(EmailVerified {
-                email: address.to_string(),
+                email: address,
             })))
         }
         Ok(EmailVerificationResult::NotFound) => Ok(EmailVerificationResponse::BadRequest(Json(
