@@ -1,5 +1,5 @@
 use anyhow::Result;
-use diesel::{result::DatabaseErrorKind, PgConnection, Queryable};
+use diesel::{PgConnection, Queryable};
 use uuid::Uuid;
 
 #[derive(Debug, Queryable)]
@@ -24,6 +24,6 @@ impl User {
             )
             .first::<Self>(conn)
             .optional()
-            .map_err(|err| anyhow::Error::from(err))
+            .map_err(anyhow::Error::from)
     }
 }

@@ -127,6 +127,6 @@ async fn create_cookie_session(
 }
 
 #[get("/protected")]
-async fn protected(session: Session) -> &'static str {
+async fn protected(_session: Session) -> &'static str {
     "Some protected value."
 }
