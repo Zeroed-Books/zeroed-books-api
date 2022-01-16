@@ -108,7 +108,6 @@ async fn create_cookie_session(
             let serialized_session = session.serialized()?;
             let session_cookie = Cookie::new("session", serialized_session);
 
-            // TODO: Secure cookie when running under HTTPS
             cookies.add_private(session_cookie);
 
             Ok(CreateSessionResponse::Created(()))
