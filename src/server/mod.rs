@@ -41,4 +41,5 @@ pub fn rocket() -> Rocket<Build> {
         .manage(tera)
         .mount("/", routes![create_user, verify_email])
         .mount("/authentication", crate::authentication::http::routes())
+        .mount("/ledger", crate::ledger::http::routes())
 }

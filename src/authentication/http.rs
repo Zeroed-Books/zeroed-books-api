@@ -49,10 +49,7 @@ async fn create_cookie_session(
     rate_limiter: &State<Box<dyn RateLimiter>>,
     credentials: Json<EmailPasswordPair>,
 ) -> Result<CreateSessionResponse, ApiError> {
-    let rate_limit_key = format!(
-        "/authentication/cookie-sessions_post_{}",
-        client_ip.to_string()
-    );
+    let rate_limit_key = format!("/authentication/cookie-sessions_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
         Ok(RateLimitResult::NotLimited) => (),
         Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
