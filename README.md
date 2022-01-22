@@ -25,3 +25,9 @@ default development setting of logging emails to the console is used.
 If the application is running behind a proxy, ensure that the proxy populates
 the `X-Real-IP` header for the request. If this is not done, all requests will
 originate from the same IP resulting in frequent rate limiting.
+
+The database must have the `uuid-ossp` extension enabled:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+```

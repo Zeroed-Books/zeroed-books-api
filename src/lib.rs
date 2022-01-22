@@ -2,6 +2,7 @@
 // structs with valid data can be created. A default implementation would avoid
 // this benefit we get from the type system.
 #![allow(clippy::new_without_default)]
+#![deny(elided_lifetimes_in_paths)]
 
 #[macro_use]
 extern crate diesel;
@@ -41,9 +42,10 @@ pub mod cli;
 mod email;
 mod http_err;
 mod identities;
+pub mod ledger;
 mod models;
 mod rate_limit;
-mod schema;
+pub mod schema;
 mod server;
 
 #[database("postgres")]
@@ -82,7 +84,7 @@ pub async fn create_user(
     templates: &State<Tera>,
     new_user_data: Json<NewUserRequest<'_>>,
 ) -> Result<CreateUserResponse, ApiError> {
-    let rate_limit_key = format!("/users_post_{}", client_ip.to_string());
+    let rate_limit_key = format!("/users_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
         Ok(RateLimitResult::NotLimited) => (),
         Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),

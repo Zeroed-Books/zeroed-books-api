@@ -12,8 +12,8 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 argon2 = { version = "0.2.2", features = ["std"] }
-async-trait = "0.1.51"
-chrono = "0.4.19"
+async-trait = "0.1.52"
+chrono = { version = "0.4.19", features = ["serde"] }
 diesel = { version = "1.4.7", features = ["chrono", "postgres", "uuidv07"] }
 diesel_migrations = { version = "1.4.0", features = ["postgres"] }
 password-hash = "0.2.2"
