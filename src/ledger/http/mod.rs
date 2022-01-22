@@ -20,12 +20,13 @@ use super::{
     commands::{postgres::PostgresCommands, Commands},
     domain::{self, currency::CurrencyParseError, transactions::NewTransactionError},
     models,
+    queries::{postgres::PostgresQueries, Queries},
 };
 
 pub mod reps;
 
 pub fn routes() -> Vec<Route> {
-    routes![create_transaction]
+    routes![create_transaction, get_transactions]
 }
 
 #[derive(Deserialize)]
@@ -92,6 +93,28 @@ impl From<&domain::transactions::TransactionEntry> for TransactionEntry {
         Self {
             account: domain.account().to_string(),
             amount: domain.amount().into(),
+        }
+    }
+}
+
+#[get("/transactions")]
+async fn get_transactions(
+    session: Session,
+    db: PostgresConn,
+) -> Result<Json<reps::ResourceCollection<Transaction>>, ApiError> {
+    let queries = PostgresQueries(&db);
+
+    match queries.latest_transactions(session.user_id()).await {
+        Ok(transactions) => Ok(Json(reps::ResourceCollection {
+            items: transactions
+                .iter()
+                .map(|transaction| transaction.into())
+                .collect(),
+        })),
+        Err(error) => {
+            error!(?error, "Failed to list transactions.");
+
+            Err(InternalServerError::default().into())
         }
     }
 }

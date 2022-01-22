@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::{
     ledger::{domain, models},
     schema, PostgresConn,
@@ -64,20 +62,6 @@ impl<'a> Commands for PostgresCommands<'a> {
             })
             .await?;
 
-        let domain_entries = entries
-            .iter()
-            .map(|entry| entry.try_into())
-            .collect::<anyhow::Result<Vec<domain::transactions::TransactionEntry>>>()?;
-
-        Ok(domain::transactions::Transaction {
-            id: saved_transaction.id,
-            user_id: saved_transaction.user_id,
-            date: saved_transaction.date,
-            payee: saved_transaction.payee,
-            notes: saved_transaction.notes,
-            entries: domain_entries,
-            created_at: saved_transaction.created_at,
-            updated_at: saved_transaction.updated_at,
-        })
+        Ok(saved_transaction.try_into_domain(&entries)?)
     }
 }
