@@ -17,8 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Install cargo components
-        run: rustup component add clippy rustfmt
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v1
 
       - name: Verify formatting
         run: cargo fmt --all -- --check
