@@ -2,11 +2,10 @@
 
 FROM mcr.microsoft.com/vscode/devcontainers/rust:1
 
-RUN rustup toolchain install stable --component clippy,rustfmt \
-    && rustup default stable
-
 USER vscode
-RUN cargo install diesel_cli --no-default-features --features postgres \
+RUN rustup toolchain install stable --component clippy,rustfmt \
+    && rustup default stable \
+    && cargo install diesel_cli --no-default-features --features postgres \
     && echo 'eval "$(diesel completions bash)"' >> $HOME/.bashrc \
     && sudo mkdir -p /usr/share/zsh/vendor-functions \
     && diesel completions zsh | sudo tee /usr/share/zsh/vendor-functions/_diesel

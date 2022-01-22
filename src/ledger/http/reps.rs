@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::ledger::domain::{self};
 
+#[derive(Serialize)]
+pub struct ResourceCollection<T: Serialize> {
+    pub items: Vec<T>,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct CurrencyAmount {
     pub currency: String,

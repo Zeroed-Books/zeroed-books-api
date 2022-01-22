@@ -176,7 +176,8 @@ impl NewTransactionEntry {
     }
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Debug, Identifiable, Queryable)]
+#[table_name = "transaction"]
 pub struct Transaction {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -187,13 +188,34 @@ pub struct Transaction {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Associations, Debug, Queryable)]
+impl Transaction {
+    pub fn try_into_domain(
+        &self,
+        entries: &[FullTransactionEntry],
+    ) -> anyhow::Result<domain::transactions::Transaction> {
+        Ok(domain::transactions::Transaction {
+            id: self.id,
+            user_id: self.user_id,
+            date: self.date,
+            payee: self.payee.clone(),
+            notes: self.notes.clone(),
+            entries: entries
+                .iter()
+                .map(|entry| entry.try_into())
+                .collect::<anyhow::Result<Vec<domain::transactions::TransactionEntry>>>()?,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        })
+    }
+}
+
+#[derive(Associations, Debug, Identifiable, Queryable)]
 #[belongs_to(Account)]
 #[belongs_to(Currency, foreign_key = "currency")]
 #[belongs_to(Transaction)]
 #[table_name = "transaction_entry"]
 pub struct TransactionEntry {
-    _id: Uuid,
+    id: Uuid,
     transaction_id: Uuid,
     _order: i32,
     account_id: Uuid,
