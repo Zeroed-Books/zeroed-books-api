@@ -155,7 +155,7 @@ impl NewTransactionEntry {
     pub fn from_domain_entries(
         transaction_id: Uuid,
         user_id: Uuid,
-        entries: &Vec<domain::transactions::TransactionEntry>,
+        entries: &[domain::transactions::TransactionEntry],
     ) -> anyhow::Result<Vec<Self>> {
         entries
             .iter()

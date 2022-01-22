@@ -24,7 +24,6 @@ pub enum NewTransactionError {
 }
 
 impl NewTransaction {
-
     /// Construct a new transaction. If the transaction is not balanced, and it
     /// cannot be automatically balanced, an error result is returned.
     ///
@@ -136,7 +135,7 @@ pub struct Transaction {
     pub user_id: Uuid,
     pub date: NaiveDate,
     pub payee: String,
-    pub notes: Option<String>,
+    pub notes: String,
     pub entries: Vec<TransactionEntry>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -74,11 +74,7 @@ impl<'a> Commands for PostgresCommands<'a> {
             user_id: saved_transaction.user_id,
             date: saved_transaction.date,
             payee: saved_transaction.payee,
-            notes: if saved_transaction.notes.is_empty() {
-                None
-            } else {
-                Some(saved_transaction.notes)
-            },
+            notes: saved_transaction.notes,
             entries: domain_entries,
             created_at: saved_transaction.created_at,
             updated_at: saved_transaction.updated_at,

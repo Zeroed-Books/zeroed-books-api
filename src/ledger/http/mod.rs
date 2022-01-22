@@ -61,8 +61,7 @@ pub struct Transaction {
     pub id: Uuid,
     pub date: NaiveDate,
     pub payee: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
+    pub notes: String,
     pub entries: Vec<TransactionEntry>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -74,7 +73,7 @@ impl From<&domain::transactions::Transaction> for Transaction {
             id: domain.id,
             date: domain.date,
             payee: domain.payee.to_owned(),
-            notes: domain.notes.as_ref().map(String::from),
+            notes: domain.notes.to_owned(),
             entries: domain.entries.iter().map(|entry| entry.into()).collect(),
             created_at: domain.created_at,
             updated_at: domain.updated_at,
