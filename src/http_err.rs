@@ -46,3 +46,8 @@ impl From<anyhow::Error> for ApiError {
         }))
     }
 }
+
+#[derive(Serialize)]
+pub struct ErrorRep {
+    pub message: String,
+}

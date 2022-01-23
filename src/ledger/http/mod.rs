@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     authentication::domain::session::Session,
-    http_err::{ApiError, InternalServerError},
+    http_err::{ApiError, ErrorRep, InternalServerError},
     PostgresConn,
 };
 
@@ -26,7 +26,7 @@ use super::{
 pub mod reps;
 
 pub fn routes() -> Vec<Route> {
-    routes![create_transaction, get_transactions]
+    routes![create_transaction, get_transaction, get_transactions]
 }
 
 #[derive(Deserialize)]
@@ -93,6 +93,45 @@ impl From<&domain::transactions::TransactionEntry> for TransactionEntry {
         Self {
             account: domain.account().to_string(),
             amount: domain.amount().into(),
+        }
+    }
+}
+
+#[derive(Responder)]
+pub enum GetTransactionResponse {
+    Ok(Json<Transaction>),
+    #[response(status = 404)]
+    NotFound(Json<ErrorRep>),
+}
+
+impl From<Option<domain::transactions::Transaction>> for GetTransactionResponse {
+    fn from(transaction: Option<domain::transactions::Transaction>) -> Self {
+        match transaction {
+            Some(t) => Self::Ok(Json((&t).into())),
+            None => Self::NotFound(Json(ErrorRep {
+                message: "Transaction not found.".to_owned(),
+            })),
+        }
+    }
+}
+
+#[get("/transactions/<transaction_id>")]
+async fn get_transaction(
+    session: Session,
+    db: PostgresConn,
+    transaction_id: Uuid,
+) -> Result<GetTransactionResponse, ApiError> {
+    let queries = PostgresQueries(&db);
+
+    match queries
+        .get_transaction(session.user_id(), transaction_id)
+        .await
+    {
+        Ok(transaction) => Ok(transaction.into()),
+        Err(error) => {
+            error!(?error, "Failed to query for transaction.");
+
+            Err(InternalServerError::default().into())
         }
     }
 }
