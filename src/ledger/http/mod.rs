@@ -5,7 +5,7 @@ use std::{
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
-use rocket::{serde::json::Json, Route};
+use rocket::{http::Status, serde::json::Json, Route};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use uuid::Uuid;
@@ -26,7 +26,12 @@ use super::{
 pub mod reps;
 
 pub fn routes() -> Vec<Route> {
-    routes![create_transaction, get_transaction, get_transactions]
+    routes![
+        create_transaction,
+        delete_transaction,
+        get_transaction,
+        get_transactions
+    ]
 }
 
 #[derive(Deserialize)]
@@ -93,6 +98,27 @@ impl From<&domain::transactions::TransactionEntry> for TransactionEntry {
         Self {
             account: domain.account().to_string(),
             amount: domain.amount().into(),
+        }
+    }
+}
+
+#[delete("/transactions/<transaction_id>")]
+async fn delete_transaction(
+    session: Session,
+    db: PostgresConn,
+    transaction_id: Uuid,
+) -> Result<Status, ApiError> {
+    let commands = PostgresCommands(&db);
+
+    match commands
+        .delete_transaction(session.user_id(), transaction_id)
+        .await
+    {
+        Ok(()) => Ok(Status::NoContent),
+        Err(error) => {
+            error!(?error, "Failed to delete transaction.");
+
+            Err(InternalServerError::default().into())
         }
     }
 }
