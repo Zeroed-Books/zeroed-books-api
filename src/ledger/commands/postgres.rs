@@ -3,6 +3,7 @@ use crate::{
     schema, PostgresConn,
 };
 use tracing::{error, info};
+use uuid::Uuid;
 
 use super::Commands;
 
@@ -10,6 +11,22 @@ pub struct PostgresCommands<'a>(pub &'a PostgresConn);
 
 #[async_trait]
 impl<'a> Commands for PostgresCommands<'a> {
+    async fn delete_transaction(&self, owner_id: Uuid, transaction_id: Uuid) -> anyhow::Result<()> {
+        use diesel::prelude::*;
+        use schema::transaction::dsl::*;
+
+        self.0
+            .run(move |conn| {
+                diesel::delete(transaction.filter(user_id.eq(owner_id).and(id.eq(transaction_id))))
+                    .execute(conn)
+            })
+            .await
+            .map(|count| {
+                info!(user_id = %owner_id, %transaction_id, rows = count, "Deleted transaction.");
+            })
+            .map_err(anyhow::Error::from)
+    }
+
     async fn persist_transaction(
         &self,
         transaction: domain::transactions::NewTransaction,
