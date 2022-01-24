@@ -9,6 +9,7 @@ use rocket::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
+use uuid::Uuid;
 
 use crate::{
     http_err::{ApiError, InternalServerError},
@@ -19,7 +20,7 @@ use crate::{
 use super::{domain::session::Session, models::User};
 
 pub fn routes() -> Vec<Route> {
-    routes![create_cookie_session, protected]
+    routes![create_cookie_session, get_user_info]
 }
 
 #[derive(Deserialize)]
@@ -122,7 +123,14 @@ async fn create_cookie_session(
     }
 }
 
-#[get("/protected")]
-async fn protected(_session: Session) -> &'static str {
-    "Some protected value."
+#[derive(Serialize)]
+pub struct UserInfo {
+    pub user_id: Uuid,
+}
+
+#[get("/me")]
+async fn get_user_info(session: Session) -> Json<UserInfo> {
+    Json(UserInfo {
+        user_id: session.user_id(),
+    })
 }
