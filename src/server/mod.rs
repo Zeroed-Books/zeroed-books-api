@@ -2,6 +2,7 @@ use rocket::{Build, Rocket};
 use tera::Tera;
 
 use crate::{
+    cors::CorsHeaders,
     create_user,
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
     rate_limit::{RateLimiter, RedisRateLimiter},
@@ -36,6 +37,7 @@ pub fn rocket() -> Rocket<Build> {
 
     rocket
         .attach(PostgresConn::fairing())
+        .attach(CorsHeaders)
         .manage(email_client)
         .manage(rate_limiter)
         .manage(tera)

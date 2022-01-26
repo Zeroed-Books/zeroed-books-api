@@ -39,6 +39,7 @@ use crate::http_err::InternalServerError;
 
 pub mod authentication;
 pub mod cli;
+pub mod cors;
 mod email;
 mod http_err;
 mod identities;
