@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     commands::{postgres::PostgresCommands, TransactionCommands, UpdateTransactionError},
-    domain::{self, currency::CurrencyParseError, transactions::NewTransactionError},
+    domain::{self, transactions::NewTransactionError},
     queries::{postgres::PostgresQueries, CurrencyQueries, TransactionQueries},
 };
 
@@ -180,17 +180,12 @@ async fn get_transactions(
     }
 }
 
-#[derive(Serialize)]
-pub struct TransactionErrorResponse {
-    pub message: Option<String>,
-}
-
 #[derive(Responder)]
 pub enum CreateTransactionResponse {
     #[response(status = 201)]
     Created(Json<Transaction>),
     #[response(status = 400)]
-    BadRequest(Json<TransactionErrorResponse>),
+    BadRequest(Json<reps::TransactionValidationError>),
 }
 
 impl From<&domain::transactions::Transaction> for CreateTransactionResponse {
@@ -199,9 +194,9 @@ impl From<&domain::transactions::Transaction> for CreateTransactionResponse {
     }
 }
 
-impl From<TransactionErrorResponse> for CreateTransactionResponse {
-    fn from(response: TransactionErrorResponse) -> Self {
-        Self::BadRequest(Json(response))
+impl From<reps::TransactionValidationError> for CreateTransactionResponse {
+    fn from(rep: reps::TransactionValidationError) -> Self {
+        Self::BadRequest(Json(rep))
     }
 }
 
@@ -235,20 +230,13 @@ async fn create_transaction(
                     );
 
                     match parse_result {
-                            Ok(amount) => Some(amount),
-                            Err(CurrencyParseError::InvalidNumber(raw_amount)) => return Ok(
-                                TransactionErrorResponse {
-                                    message: Some(format!("The amount '{}' is not a valid number.", raw_amount))
-                                }.into()
-                            ),
-                            Err(CurrencyParseError::TooManyDecimals(decimals)) => return Ok(
-                                TransactionErrorResponse {
-                                    message: Some(format!("The currency allows {} decimal place(s), but the provided value had {}.", currency.minor_units(), decimals))
-                                }.into()
-                            )
+                        Ok(amount) => Some(amount),
+                        Err(error) => {
+                            return Ok(reps::TransactionValidationError::from(error).into())
                         }
+                    }
                 } else {
-                    return Ok(TransactionErrorResponse {
+                    return Ok(reps::TransactionValidationError {
                         message: Some(format!(
                             "The currency code '{}' is unrecognized.",
                             &amount_rep.currency
@@ -275,8 +263,8 @@ async fn create_transaction(
         Ok(t) => t,
         Err(NewTransactionError::Unbalanced(_)) => {
             return Ok(CreateTransactionResponse::BadRequest(Json(
-                TransactionErrorResponse {
-                    message: Some("The entries in the transaction are unbalanced.".to_string()),
+                reps::TransactionValidationError {
+                    message: Some("The entries in the transaction are unbalanced.".to_owned()),
                 },
             )))
         }
@@ -301,7 +289,7 @@ pub enum UpdateTransactionResponse {
     #[response(status = 200)]
     Updated(Json<Transaction>),
     #[response(status = 400)]
-    BadRequest(Json<TransactionErrorResponse>),
+    BadRequest(Json<reps::TransactionValidationError>),
     #[response(status = 404)]
     NotFound(Json<ErrorRep>),
 }
@@ -312,9 +300,9 @@ impl From<&domain::transactions::Transaction> for UpdateTransactionResponse {
     }
 }
 
-impl From<TransactionErrorResponse> for UpdateTransactionResponse {
-    fn from(response: TransactionErrorResponse) -> Self {
-        Self::BadRequest(Json(response))
+impl From<reps::TransactionValidationError> for UpdateTransactionResponse {
+    fn from(rep: reps::TransactionValidationError) -> Self {
+        Self::BadRequest(Json(rep))
     }
 }
 
@@ -349,20 +337,13 @@ async fn update_transaction(
                     );
 
                     match parse_result {
-                            Ok(amount) => Some(amount),
-                            Err(CurrencyParseError::InvalidNumber(raw_amount)) => return Ok(
-                                TransactionErrorResponse {
-                                    message: Some(format!("The amount '{}' is not a valid number.", raw_amount))
-                                }.into()
-                            ),
-                            Err(CurrencyParseError::TooManyDecimals(decimals)) => return Ok(
-                                TransactionErrorResponse {
-                                    message: Some(format!("The currency allows {} decimal place(s), but the provided value had {}.", currency.minor_units(), decimals))
-                                }.into()
-                            )
+                        Ok(amount) => Some(amount),
+                        Err(error) => {
+                            return Ok(reps::TransactionValidationError::from(error).into())
                         }
+                    }
                 } else {
-                    return Ok(TransactionErrorResponse {
+                    return Ok(reps::TransactionValidationError {
                         message: Some(format!(
                             "The currency code '{}' is unrecognized.",
                             &amount_rep.currency
@@ -388,7 +369,7 @@ async fn update_transaction(
     ) {
         Ok(t) => t,
         Err(NewTransactionError::Unbalanced(_)) => {
-            return Ok(TransactionErrorResponse {
+            return Ok(reps::TransactionValidationError {
                 message: Some("The entries in the transaction are unbalanced.".to_string()),
             }
             .into())

@@ -10,7 +10,7 @@ pub enum CurrencyParseError {
     InvalidNumber(String),
     /// The provided amount included more precision than the currency's minor
     /// units allow for. The parameter is the number of
-    TooManyDecimals(usize),
+    TooManyDecimals(Currency, usize),
 }
 
 impl Currency {
@@ -67,7 +67,10 @@ impl Currency {
                         width = self.minor_units.into(),
                     )
                 } else {
-                    return Err(CurrencyParseError::TooManyDecimals(decimal_part.len()));
+                    return Err(CurrencyParseError::TooManyDecimals(
+                        self.clone(),
+                        decimal_part.len(),
+                    ));
                 }
             }
         };
