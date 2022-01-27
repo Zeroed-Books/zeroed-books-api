@@ -5,7 +5,7 @@ use super::domain::transactions::{NewTransaction, Transaction};
 pub mod postgres;
 
 #[async_trait]
-pub trait Commands {
+pub trait TransactionCommands {
     /// Delete a transaction.
     ///
     /// # Arguments

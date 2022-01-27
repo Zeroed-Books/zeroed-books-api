@@ -7,12 +7,12 @@ use anyhow::Context;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use super::{Commands, UpdateTransactionError};
+use super::{TransactionCommands, UpdateTransactionError};
 
 pub struct PostgresCommands<'a>(pub &'a PostgresConn);
 
 #[async_trait]
-impl<'a> Commands for PostgresCommands<'a> {
+impl<'a> TransactionCommands for PostgresCommands<'a> {
     async fn delete_transaction(&self, owner_id: Uuid, transaction_id: Uuid) -> anyhow::Result<()> {
         use diesel::prelude::*;
         use schema::transaction::dsl::*;

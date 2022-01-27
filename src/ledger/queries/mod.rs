@@ -1,11 +1,26 @@
 pub mod postgres;
 
+use std::collections::HashMap;
+
 use uuid::Uuid;
 
 use super::domain;
 
 #[async_trait]
-pub trait Queries {
+pub trait CurrencyQueries {
+    /// Get a mapping of currency codes to currency objects.
+    ///
+    /// # Arguments
+    ///
+    /// * `currency_codes` - The codes of the currencies to retrieve.
+    async fn get_currencies_by_code(
+        &self,
+        currency_codes: Vec<String>,
+    ) -> anyhow::Result<HashMap<String, domain::currency::Currency>>;
+}
+
+#[async_trait]
+pub trait TransactionQueries {
     /// Get a single transaction by its ID.
     ///
     /// # Arguments

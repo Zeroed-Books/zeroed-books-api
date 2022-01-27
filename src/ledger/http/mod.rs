@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryInto,
-    iter::FromIterator,
-};
+use std::{collections::HashSet, iter::FromIterator};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::{http::Status, serde::json::Json, Route};
@@ -17,10 +13,9 @@ use crate::{
 };
 
 use super::{
-    commands::{postgres::PostgresCommands, Commands, UpdateTransactionError},
+    commands::{postgres::PostgresCommands, TransactionCommands, UpdateTransactionError},
     domain::{self, currency::CurrencyParseError, transactions::NewTransactionError},
-    models,
-    queries::{postgres::PostgresQueries, Queries},
+    queries::{postgres::PostgresQueries, CurrencyQueries, TransactionQueries},
 };
 
 pub mod reps;
@@ -216,33 +211,17 @@ async fn create_transaction(
     new_transaction: Json<NewTransaction>,
     db: PostgresConn,
 ) -> Result<CreateTransactionResponse, ApiError> {
-    let used_currency_codes = Vec::from_iter(new_transaction.used_currency_codes());
+    let queries = PostgresQueries(&db);
 
-    let currencies: Vec<models::Currency> = match db
-        .run(|conn| models::Currency::find_by_codes(conn, used_currency_codes))
-        .await
-    {
-        Ok(c) => c,
+    let used_currency_codes = Vec::from_iter(new_transaction.used_currency_codes());
+    let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
+        Ok(currencies) => currencies,
         Err(error) => {
-            error!(?error, "Failed to query for currency codes.");
+            error!(?error, currency_codes = ?new_transaction.used_currency_codes(), "Failed to fetch currencies used in transaction.");
 
             return Err(InternalServerError::default().into());
         }
     };
-
-    let mut used_currencies = HashMap::new();
-    for currency_model in currencies {
-        let currency: domain::currency::Currency = match (&currency_model).try_into() {
-            Ok(currency) => currency,
-            Err(error) => {
-                error!(?error, "Failed to convert currency model to domain object.");
-
-                return Err(InternalServerError::default().into());
-            }
-        };
-
-        used_currencies.insert(currency.code().to_owned(), currency);
-    }
 
     let mut parsed_entries = Vec::with_capacity(new_transaction.entries.len());
     for new_entry in new_transaction.entries.iter() {
@@ -346,33 +325,17 @@ async fn update_transaction(
     updated_transaction: Json<NewTransaction>,
     db: PostgresConn,
 ) -> Result<UpdateTransactionResponse, ApiError> {
-    let used_currency_codes = Vec::from_iter(updated_transaction.used_currency_codes());
+    let queries = PostgresQueries(&db);
 
-    let currencies: Vec<models::Currency> = match db
-        .run(|conn| models::Currency::find_by_codes(conn, used_currency_codes))
-        .await
-    {
-        Ok(c) => c,
+    let used_currency_codes = Vec::from_iter(updated_transaction.used_currency_codes());
+    let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
+        Ok(currencies) => currencies,
         Err(error) => {
-            error!(?error, "Failed to query for currency codes.");
+            error!(?error, currency_codes = ?updated_transaction.used_currency_codes(), "Failed to fetch currencies used in transaction.");
 
             return Err(InternalServerError::default().into());
         }
     };
-
-    let mut used_currencies = HashMap::new();
-    for currency_model in currencies {
-        let currency: domain::currency::Currency = match (&currency_model).try_into() {
-            Ok(currency) => currency,
-            Err(error) => {
-                error!(?error, "Failed to convert currency model to domain object.");
-
-                return Err(InternalServerError::default().into());
-            }
-        };
-
-        used_currencies.insert(currency.code().to_owned(), currency);
-    }
 
     let mut parsed_entries = Vec::with_capacity(updated_transaction.entries.len());
     for new_entry in updated_transaction.entries.iter() {

@@ -1,3 +1,5 @@
+use std::{collections::HashMap, convert::TryInto};
+
 use tracing::{debug, trace};
 use uuid::Uuid;
 
@@ -6,14 +8,41 @@ use crate::{
     schema, PostgresConn,
 };
 
-use super::Queries;
+use super::{CurrencyQueries, TransactionQueries};
 
 pub struct PostgresQueries<'a>(pub &'a PostgresConn);
+
+#[async_trait]
+impl<'a> CurrencyQueries for PostgresQueries<'a> {
+    async fn get_currencies_by_code(
+        &self,
+        currency_codes: Vec<String>,
+    ) -> anyhow::Result<HashMap<String, domain::currency::Currency>> {
+        use diesel::prelude::*;
+        use schema::currency::dsl::*;
+
+        let currency_models = self
+            .0
+            .run::<_, anyhow::Result<_>>(move |conn| {
+                Ok(currency
+                    .filter(code.eq_any(currency_codes))
+                    .get_results::<models::Currency>(conn)?)
+            })
+            .await?;
+
+        let mut currency_map = HashMap::with_capacity(currency_models.len());
+        for model in currency_models.iter() {
+            currency_map.insert(model.code.clone(), model.try_into()?);
+        }
+
+        Ok(currency_map)
+    }
+}
 
 type TransactionWithEntries = (models::Transaction, Vec<models::FullTransactionEntry>);
 
 #[async_trait]
-impl<'a> Queries for PostgresQueries<'a> {
+impl<'a> TransactionQueries for PostgresQueries<'a> {
     async fn get_transaction(
         &self,
         user_id: Uuid,
