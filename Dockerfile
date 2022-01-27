@@ -1,28 +1,50 @@
-FROM rust:1 as builder
+FROM rust:1.58 AS builder
+
+# Create appuser
+ENV USER=zeroed-books
+ENV UID=10001
+
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    "${USER}"
 
 WORKDIR /usr/src/zeroed-books-api
-
-RUN rustup target add x86_64-unknown-linux-musl
 
 # Create a dummy project and run a build with all our dependencies. As long as
 # the dependencies don't change, any future builds will only have to recompile
 # our code (and not the dependencies).
 RUN cargo init
 COPY Cargo.toml Cargo.lock ./
-RUN cargo build --locked --release --target x86_64-unknown-linux-musl
+RUN cargo build --locked --release
 
-COPY src src
+COPY . .
 # We have to touch a file so that the modification timestamp is different from
 # our dummy program. If we don't, cargo doesn't rebuild the project and we end
 # up with the output of the dummy program.
 #
 # https://github.com/rust-lang/cargo/issues/7982
 RUN touch src/main.rs
-RUN cargo build --locked --release --target x86_64-unknown-linux-musl
+RUN cargo build --locked --release
 
 
-FROM scratch
+FROM debian:buster-slim
 
-COPY --from=builder /usr/src/zeroed-books-api/target/x86_64-unknown-linux-musl/release/zeroed-books-api /zeroed-books-api
+RUN apt-get update && apt-get install --no-install-recommends --yes \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT [ "/zeroed-books-api" ]
+# Import from builder.
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+WORKDIR /zeroed-books
+
+COPY --from=builder /usr/src/zeroed-books-api/target/release/zeroed-books-api ./
+COPY templates ./templates
+
+ENTRYPOINT [ "/zeroed-books/zeroed-books-api" ]
