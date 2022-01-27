@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    commands::{postgres::PostgresCommands, Commands},
+    commands::{postgres::PostgresCommands, Commands, UpdateTransactionError},
     domain::{self, currency::CurrencyParseError, transactions::NewTransactionError},
     models,
     queries::{postgres::PostgresQueries, Queries},
@@ -30,7 +30,8 @@ pub fn routes() -> Vec<Route> {
         create_transaction,
         delete_transaction,
         get_transaction,
-        get_transactions
+        get_transactions,
+        update_transaction,
     ]
 }
 
@@ -308,6 +309,143 @@ async fn create_transaction(
         Ok(t) => t,
         Err(error) => {
             error!(?error, "Failed to persist transaction.");
+
+            return Err(InternalServerError::default().into());
+        }
+    };
+
+    Ok((&saved_transaction).into())
+}
+
+#[derive(Responder)]
+pub enum UpdateTransactionResponse {
+    #[response(status = 200)]
+    Updated(Json<Transaction>),
+    #[response(status = 400)]
+    BadRequest(Json<TransactionErrorResponse>),
+    #[response(status = 404)]
+    NotFound(Json<ErrorRep>),
+}
+
+impl From<&domain::transactions::Transaction> for UpdateTransactionResponse {
+    fn from(transaction: &domain::transactions::Transaction) -> Self {
+        Self::Updated(Json(transaction.into()))
+    }
+}
+
+impl From<TransactionErrorResponse> for UpdateTransactionResponse {
+    fn from(response: TransactionErrorResponse) -> Self {
+        Self::BadRequest(Json(response))
+    }
+}
+
+#[put("/transactions/<transaction_id>", data = "<updated_transaction>")]
+async fn update_transaction(
+    session: Session,
+    transaction_id: Uuid,
+    updated_transaction: Json<NewTransaction>,
+    db: PostgresConn,
+) -> Result<UpdateTransactionResponse, ApiError> {
+    let used_currency_codes = Vec::from_iter(updated_transaction.used_currency_codes());
+
+    let currencies: Vec<models::Currency> = match db
+        .run(|conn| models::Currency::find_by_codes(conn, used_currency_codes))
+        .await
+    {
+        Ok(c) => c,
+        Err(error) => {
+            error!(?error, "Failed to query for currency codes.");
+
+            return Err(InternalServerError::default().into());
+        }
+    };
+
+    let mut used_currencies = HashMap::new();
+    for currency_model in currencies {
+        let currency: domain::currency::Currency = match (&currency_model).try_into() {
+            Ok(currency) => currency,
+            Err(error) => {
+                error!(?error, "Failed to convert currency model to domain object.");
+
+                return Err(InternalServerError::default().into());
+            }
+        };
+
+        used_currencies.insert(currency.code().to_owned(), currency);
+    }
+
+    let mut parsed_entries = Vec::with_capacity(updated_transaction.entries.len());
+    for new_entry in updated_transaction.entries.iter() {
+        let parsed_amount = match &new_entry.amount {
+            None => None,
+            Some(amount_rep) => {
+                if let Some(currency) = used_currencies.get(&amount_rep.currency) {
+                    let parse_result = domain::currency::CurrencyAmount::from_str(
+                        currency.clone(),
+                        &amount_rep.value,
+                    );
+
+                    match parse_result {
+                            Ok(amount) => Some(amount),
+                            Err(CurrencyParseError::InvalidNumber(raw_amount)) => return Ok(
+                                TransactionErrorResponse {
+                                    message: Some(format!("The amount '{}' is not a valid number.", raw_amount))
+                                }.into()
+                            ),
+                            Err(CurrencyParseError::TooManyDecimals(decimals)) => return Ok(
+                                TransactionErrorResponse {
+                                    message: Some(format!("The currency allows {} decimal place(s), but the provided value had {}.", currency.minor_units(), decimals))
+                                }.into()
+                            )
+                        }
+                } else {
+                    return Ok(TransactionErrorResponse {
+                        message: Some(format!(
+                            "The currency code '{}' is unrecognized.",
+                            &amount_rep.currency
+                        )),
+                    }
+                    .into());
+                }
+            }
+        };
+
+        parsed_entries.push(domain::transactions::NewTransactionEntry {
+            account: new_entry.account.clone(),
+            amount: parsed_amount,
+        });
+    }
+
+    let transaction = match domain::transactions::NewTransaction::new(
+        session.user_id(),
+        updated_transaction.date,
+        updated_transaction.payee.clone(),
+        updated_transaction.notes.clone(),
+        parsed_entries,
+    ) {
+        Ok(t) => t,
+        Err(NewTransactionError::Unbalanced(_)) => {
+            return Ok(TransactionErrorResponse {
+                message: Some("The entries in the transaction are unbalanced.".to_string()),
+            }
+            .into())
+        }
+    };
+
+    let ledger_commands = PostgresCommands(&db);
+
+    let saved_transaction = match ledger_commands
+        .update_transaction(transaction_id, transaction)
+        .await
+    {
+        Ok(t) => t,
+        Err(UpdateTransactionError::TransactionNotFound) => {
+            return Ok(UpdateTransactionResponse::NotFound(Json(ErrorRep {
+                message: "No transaction found with the provided ID.".to_owned(),
+            })))
+        }
+        Err(error) => {
+            error!(?error, %transaction_id, "Failed to update transaction.");
 
             return Err(InternalServerError::default().into());
         }
