@@ -208,7 +208,7 @@ mod test {
     fn parse_amount_too_many_decimals_zero_minor_units() {
         let currency = test_currency(0);
         let raw_amount = "1.0";
-        let want_error = CurrencyParseError::TooManyDecimals(1);
+        let want_error = CurrencyParseError::TooManyDecimals(currency.clone(), 1);
 
         let error = currency
             .parse_amount(raw_amount)
@@ -221,7 +221,7 @@ mod test {
     fn parse_amount_too_many_decimals_one_minor_unit() {
         let currency = test_currency(1);
         let raw_amount = "1.00";
-        let want_error = CurrencyParseError::TooManyDecimals(2);
+        let want_error = CurrencyParseError::TooManyDecimals(currency.clone(), 2);
 
         let error = currency
             .parse_amount(raw_amount)
@@ -234,7 +234,7 @@ mod test {
     fn parse_amount_too_many_decimals_five_minor_units() {
         let currency = test_currency(5);
         let raw_amount = "3.141592";
-        let want_error = CurrencyParseError::TooManyDecimals(6);
+        let want_error = CurrencyParseError::TooManyDecimals(currency.clone(), 6);
 
         let error = currency
             .parse_amount(raw_amount)
