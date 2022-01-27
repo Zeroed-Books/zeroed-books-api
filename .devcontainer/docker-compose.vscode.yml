@@ -12,6 +12,13 @@ services:
             ROCKET_DATABASES: "{ postgres = { url = \"postgres://postgres:password@postgres/postgres\" } }"
 
             ROCKET_REDIS_URL: redis://redis
+
+            # A stable secret key so cookie sessions stay valid across restarts.
+
+            # Generated with:
+
+            #   $ openssl rand -base64 32
+            ROCKET_SECRET_KEY: jAxXeR+lG38ZA5ONOVci4ICc2VsuwbnHF4piuMYu8n8=
         volumes:
             # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
             # mounts are relative to the first file in the list, which is a level up.
