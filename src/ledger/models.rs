@@ -84,10 +84,10 @@ impl TryFrom<&Currency> for domain::currency::Currency {
     }
 }
 
-#[derive(Insertable)]
+#[derive(AsChangeset, Insertable)]
 #[table_name = "transaction"]
 pub struct NewTransaction {
-    user_id: Uuid,
+    pub user_id: Uuid,
     date: NaiveDate,
     payee: String,
     notes: String,

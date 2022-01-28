@@ -5,7 +5,7 @@ use super::domain::transactions::{NewTransaction, Transaction};
 pub mod postgres;
 
 #[async_trait]
-pub trait Commands {
+pub trait TransactionCommands {
     /// Delete a transaction.
     ///
     /// # Arguments
@@ -31,4 +31,23 @@ pub trait Commands {
     /// transaction that was persisted.
     async fn persist_transaction(&self, transaction: NewTransaction)
         -> anyhow::Result<Transaction>;
+
+    /// Update an existing transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `transaction_id` - The ID of the transaction to update.
+    /// * `update` - The updated transaction fields.
+    async fn update_transaction(
+        &self,
+        transaction_id: Uuid,
+        update: NewTransaction,
+    ) -> Result<Transaction, UpdateTransactionError>;
+}
+
+#[derive(Debug)]
+pub enum UpdateTransactionError {
+    TransactionNotFound,
+    DatabaseError(anyhow::Error),
+    Unknown(anyhow::Error),
 }
