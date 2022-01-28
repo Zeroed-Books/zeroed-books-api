@@ -31,5 +31,10 @@
 	},
 	"workspaceFolder": "/workspace",
 	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
-	"remoteUser": "vscode"
+	"remoteUser": "vscode",
+	// When we mount the volume to store GitHub credentials, it gets created
+	// with root permissions. This means we can't authenticate with the `gh` CLI
+	// because it doesn't have permission to store the credentials file. Setting
+	// ownership fixes that.
+	"onCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.config"
 }

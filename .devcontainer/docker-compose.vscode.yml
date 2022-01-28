@@ -14,15 +14,17 @@ services:
             ROCKET_REDIS_URL: redis://redis
 
             # A stable secret key so cookie sessions stay valid across restarts.
-
             # Generated with:
-
             #   $ openssl rand -base64 32
             ROCKET_SECRET_KEY: jAxXeR+lG38ZA5ONOVci4ICc2VsuwbnHF4piuMYu8n8=
         volumes:
             # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
             # mounts are relative to the first file in the list, which is a level up.
             - .:/workspace:cached
+
+            # Cache GitHub credentials so we don't have to keep
+            # re-authenticating.
+            - github-credentials:/home/vscode/.config/gh
 
         # [Optional] Required for ptrace-based debuggers like C++, Go, and Rust
         cap_add:
@@ -32,3 +34,6 @@ services:
 
         # Overrides default command so things don't shut down after the process ends.
         command: /bin/sh -c "while sleep 1000; do :; done"
+
+volumes:
+    github-credentials: null
