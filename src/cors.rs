@@ -1,6 +1,6 @@
 use rocket::{
     fairing::{Fairing, Info, Kind},
-    http::Header,
+    http::{Header, Method, Status},
     Request, Response,
 };
 
@@ -16,13 +16,25 @@ impl Fairing for CorsHeaders {
         }
     }
 
-    async fn on_response<'r>(&self, _req: &'r Request<'_>, response: &mut Response<'r>) {
-        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+    async fn on_response<'r>(&self, req: &'r Request<'_>, response: &mut Response<'r>) {
+        if response.status() == Status::NotFound && req.method() == Method::Options {
+            response.set_status(Status::Ok);
+        }
+
+        // Credentialed requests require the allowed origin to match the request
+        // origin.
+        response.set_header(Header::new(
+            "Access-Control-Allow-Origin",
+            req.headers().get_one("Origin").unwrap_or("*").to_owned(),
+        ));
         response.set_header(Header::new(
             "Access-Control-Allow-Methods",
             "GET, OPTIONS, POST, PUT",
         ));
-        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+        response.set_header(Header::new(
+            "Access-Control-Allow-Headers",
+            "Accept, Content-Type, Origin",
+        ));
         response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
     }
 }
