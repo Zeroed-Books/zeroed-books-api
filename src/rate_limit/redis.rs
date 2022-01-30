@@ -16,7 +16,7 @@ impl RedisRateLimiter {
     /// # Arguments
     ///
     /// * `connection_uri` - The connection string used to connect to Redis.
-    pub fn new(connection_uri: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(connection_uri: &str) -> anyhow::Result<Self> {
         Ok(Self {
             client: redis::Client::open(connection_uri)?,
         })
