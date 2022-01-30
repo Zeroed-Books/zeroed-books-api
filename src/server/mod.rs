@@ -9,33 +9,33 @@ use crate::{
     verify_email, PostgresConn,
 };
 
-pub fn rocket() -> Rocket<Build> {
-    let rocket = rocket::build();
-    let figment = rocket.figment();
+pub struct Options {
+    pub database_pool_size: u32,
+    pub database_timeout_seconds: u8,
+    pub database_url: String,
 
-    let sendgrid_key: Option<String> = match figment.extract_inner("sendgrid_key") {
-        Ok(key) => Some(key),
-        Err(_) => None,
-    };
+    pub redis_url: String,
 
-    let email_client: Box<dyn EmailClient> = if let Some(api_key) = sendgrid_key {
+    pub secret_key: String,
+
+    pub sendgrid_key: Option<String>,
+}
+
+pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
+    let figment =
+        rocket::Config::figment().merge(("databases.postgres", build_database_config(&opts)));
+
+    let email_client: Box<dyn EmailClient> = if let Some(api_key) = opts.sendgrid_key {
         Box::new(SendgridMailer::new(api_key))
     } else {
         Box::new(ConsoleMailer {})
     };
 
-    let tera = match Tera::new("templates/**/*") {
-        Ok(t) => t,
-        Err(e) => panic!("{}", e),
-    };
+    let tera = Tera::new("templates/**/*")?;
 
-    let redis_uri: String = figment
-        .extract_inner("redis_url")
-        .expect("No REDIS_URL provided");
-    let rate_limiter: Box<dyn RateLimiter> =
-        Box::new(RedisRateLimiter::new(&redis_uri).expect("failed to create Redis rate limiter"));
+    let rate_limiter: Box<dyn RateLimiter> = Box::new(RedisRateLimiter::new(&opts.redis_url)?);
 
-    rocket
+    Ok(rocket::custom(figment)
         .attach(PostgresConn::fairing())
         .attach(CorsHeaders)
         .manage(email_client)
@@ -43,5 +43,13 @@ pub fn rocket() -> Rocket<Build> {
         .manage(tera)
         .mount("/", routes![create_user, verify_email])
         .mount("/authentication", crate::authentication::http::routes())
-        .mount("/ledger", crate::ledger::http::routes())
+        .mount("/ledger", crate::ledger::http::routes()))
+}
+
+fn build_database_config(opts: &Options) -> rocket_sync_db_pools::Config {
+    rocket_sync_db_pools::Config {
+        pool_size: opts.database_pool_size,
+        timeout: opts.database_timeout_seconds,
+        url: opts.database_url.to_owned(),
+    }
 }

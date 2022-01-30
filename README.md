@@ -11,12 +11,27 @@ with:
 docker compose -f ./docker-compose.base.yml -f ./docker-compose.standalone.yml up
 ```
 
-## Environment Variables
+## Configuration
 
-**`ROCKET_REDIS_URL`:** Connection string used to connect to Redis. Redis is
+For a full list of configuration options, see the `help` command of the
+application binary.
+
+```bash
+zeroed-books-api help
+```
+
+### Environment Variables
+
+**`DATABASE_URL`:** The connection string used to connect to the primary
+Postgres database.
+
+**`REDIS_URL`:** Connection string used to connect to Redis. Redis is
 used as the backing store for rate limiting.
 
-**`ROCKET_SENDGRID_KEY`:** An API token for Sendgrid. If this is provided,
+**`SECRET_KEY`:** A secret key used primarily to encrypt private cookies. This
+can be generated with: `openssl rand -base64 32`.
+
+**`SENDGRID_KEY`:** An API token for Sendgrid. If this is provided,
 transactional emails will be sent using Sendgrid. If this is left empty, the
 default development setting of logging emails to the console is used.
 
