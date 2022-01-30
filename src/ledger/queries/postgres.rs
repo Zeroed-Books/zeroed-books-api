@@ -106,7 +106,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
                     .filter(schema::transaction::user_id.eq(user_id))
                     .order((
                         schema::transaction::date.desc(),
-                        schema::transaction::created_at.asc(),
+                        schema::transaction::created_at.desc(),
                     ))
                     .limit(50)
                     .load::<models::Transaction>(conn)?;
