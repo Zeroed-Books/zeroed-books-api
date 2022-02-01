@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use sendgrid::v3::{Content, Email, Sender};
+use sendgrid::v3::{Content, Email, Personalization, Sender};
 
 pub struct Message {
     pub to: String,
@@ -11,14 +11,16 @@ pub struct Message {
 
 impl From<&Message> for sendgrid::v3::Message {
     fn from(msg: &Message) -> Self {
-        Self::new(Email::new(msg.to.clone()))
-            .set_from(Email::new(msg.from.clone()))
+        let personalization = Personalization::new(Email::new(msg.to.to_owned()));
+
+        Self::new(Email::new(msg.from.clone()))
             .set_subject(&msg.subject)
             .add_content(
                 Content::new()
                     .set_content_type("text/plain")
                     .set_value(msg.text.clone()),
             )
+            .add_personalization(personalization)
     }
 }
 

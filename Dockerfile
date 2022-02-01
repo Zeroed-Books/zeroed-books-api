@@ -35,8 +35,10 @@ RUN cargo build --locked --release
 FROM debian:buster-slim
 
 RUN apt-get update && apt-get install --no-install-recommends --yes \
+    ca-certificates \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-ca-certificates
 
 # Import from builder.
 COPY --from=builder /etc/passwd /etc/passwd
