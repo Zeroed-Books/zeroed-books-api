@@ -35,7 +35,7 @@ default-features = false
 features = ["diesel_postgres_pool"]
 
 [dependencies.sendgrid]
-version = "0.17.3"
+version = "0.17.4"
 features = ["async"]
 
 [dependencies.tera]
