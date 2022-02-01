@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+    # Don't rebuild the Docker image if only the helm chart changed.
+    paths-ignore:
+      - 'helm-chart/**'
+
 jobs:
   build:
     runs-on: ubuntu-latest

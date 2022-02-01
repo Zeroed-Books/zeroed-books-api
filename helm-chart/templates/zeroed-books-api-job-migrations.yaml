@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ print .Release.Name "-migrations-" (sha256sum (printf "%d-%s" .Release.Revision .Values.image) | trunc 12) | quote }}
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+        - name: {{ .Release.Name | quote }}
+          image: {{ .Values.image | quote }}
+          imagePullPolicy: IfNotPresent
+
+          args: ["migrate"]
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.secrets.name | quote }}
+                  key: database_url
+
+      restartPolicy: Never
+
+  backoffLimit: 5

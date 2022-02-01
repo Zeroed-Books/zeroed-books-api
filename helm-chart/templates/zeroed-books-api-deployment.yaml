@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name | quote }}
+  namespace: default
+  labels:
+    app: {{ .Release.Name | quote }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name | quote }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name | quote }}
+    spec:
+      containers:
+        - name: {{ .Release.Name | quote }}
+          image: {{ .Values.image | quote }}
+          imagePullPolicy: IfNotPresent
+
+          args: ["serve", "--database-pool-size", "6"]
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.secrets.name | quote }}
+                  key: database_url
+
+            - name: REDIS_URL
+              value: {{ print "redis://" .Release.Name "-cache" | quote }}
+
+            - name: ROCKET_ADDRESS
+              value: "0.0.0.0"
+
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.secrets.name | quote }}
+                  key: secret_key
+
+            - name: SENDGRID_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.secrets.name | quote }}
+                  key: sendgrid_key
+          ports:
+            - containerPort: 8000
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
