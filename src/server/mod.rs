@@ -22,8 +22,9 @@ pub struct Options {
 }
 
 pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
-    let figment =
-        rocket::Config::figment().merge(("databases.postgres", build_database_config(&opts)));
+    let figment = rocket::Config::figment()
+        .merge(("databases.postgres", build_database_config(&opts)))
+        .merge(("secret_key", &opts.secret_key));
 
     let email_client: Box<dyn EmailClient> = if let Some(api_key) = opts.sendgrid_key {
         Box::new(SendgridMailer::new(api_key))
