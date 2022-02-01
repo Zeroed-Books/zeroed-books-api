@@ -23,10 +23,10 @@ struct MigrateOpts {
     database_url: String,
 }
 
-impl From<&MigrateOpts> for migrate::MigrationOpts {
-    fn from(opts: &MigrateOpts) -> Self {
+impl From<MigrateOpts> for migrate::MigrationOpts {
+    fn from(opts: MigrateOpts) -> Self {
         Self {
-            database_url: opts.database_url.to_owned(),
+            database_url: opts.database_url,
         }
     }
 }
@@ -44,6 +44,22 @@ struct ServeOpts {
     /// Connection string for the application database.
     #[clap(long = "database-url", env = "DATABASE_URL")]
     database_url: String,
+
+    /// Address to send emails from.
+    #[clap(
+        long = "email-from-address",
+        default_value = "admin@localhost",
+        env = "EMAIL_FROM_ADDRESS"
+    )]
+    email_from_address: String,
+
+    /// Display name to send emails from.
+    #[clap(
+        long = "email-from-name",
+        default_value = "Zeroed Books",
+        env = "EMAIL_FROM_NAME"
+    )]
+    email_from_name: String,
 
     /// Connection string for Redis.
     #[clap(long = "redis-url", env = "REDIS_URL")]
@@ -64,15 +80,17 @@ struct ServeOpts {
     sendgrid_key: Option<String>,
 }
 
-impl From<&ServeOpts> for server::Options {
-    fn from(opts: &ServeOpts) -> Self {
+impl From<ServeOpts> for server::Options {
+    fn from(opts: ServeOpts) -> Self {
         Self {
             database_pool_size: opts.database_pool_size,
             database_timeout_seconds: opts.database_timeout,
-            database_url: opts.database_url.to_owned(),
-            redis_url: opts.redis_url.to_owned(),
-            secret_key: opts.secret_key.to_owned(),
-            sendgrid_key: opts.sendgrid_key.to_owned(),
+            database_url: opts.database_url,
+            email_from_address: opts.email_from_address,
+            email_from_name: opts.email_from_name,
+            redis_url: opts.redis_url,
+            secret_key: opts.secret_key,
+            sendgrid_key: opts.sendgrid_key,
         }
     }
 }
@@ -80,12 +98,11 @@ impl From<&ServeOpts> for server::Options {
 pub async fn run_with_sys_args() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    match &cli.command {
+    match cli.command {
         Commands::Migrate(opts) => Ok(migrate::run_migrations(opts.into())?),
         Commands::Serve(opts) => Ok(server::rocket(opts.into())?
             .ignite()
-            .await
-            .expect("Rocket ignition failure")
+            .await?
             .launch()
             .await
             .map(|_| ())?),

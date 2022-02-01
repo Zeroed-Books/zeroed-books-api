@@ -29,6 +29,20 @@ spec:
                   name: {{ .Values.config.secrets.name | quote }}
                   key: database_url
 
+            - name: EMAIL_FROM_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.config.configMap.name | quote }}
+                  key: email_from_address
+                  optional: true
+
+            - name: EMAIL_FROM_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.config.configMap.name | quote }}
+                  key: email_from_name
+                  optional: true
+
             - name: REDIS_URL
               value: {{ print "redis://" .Release.Name "-cache" | quote }}
 
@@ -46,6 +60,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.config.secrets.name | quote }}
                   key: sendgrid_key
+                  optional: true
           ports:
             - containerPort: 8000
 
