@@ -7,7 +7,7 @@ on:
 
     # Don't rebuild the Docker image if only the helm chart changed.
     paths-ignore:
-      - 'helm-chart/**'
+      - 'charts/**'
 
 jobs:
   build:
