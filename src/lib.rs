@@ -135,8 +135,6 @@ pub async fn create_user(
                     .expect("template failure");
 
                 let message = Message {
-                    // TODO: Pull from environment.
-                    from: "no-reply@zeroedbooks.com".to_owned(),
                     to: email.provided_address().to_string(),
                     subject: "Duplicate Registration".to_owned(),
                     text: content,
@@ -198,8 +196,6 @@ pub async fn create_user(
         .expect("template failure");
 
     let message = Message {
-        // TODO: Pull from environment.
-        from: "no-reply@zeroedbooks.com".to_owned(),
         to: email.provided_address().to_string(),
         subject: "Please Confirm your Email".to_owned(),
         text: content,

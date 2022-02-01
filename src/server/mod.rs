@@ -14,6 +14,9 @@ pub struct Options {
     pub database_timeout_seconds: u8,
     pub database_url: String,
 
+    pub email_from_address: String,
+    pub email_from_name: String,
+
     pub redis_url: String,
 
     pub secret_key: String,
@@ -27,9 +30,15 @@ pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
         .merge(("secret_key", &opts.secret_key));
 
     let email_client: Box<dyn EmailClient> = if let Some(api_key) = opts.sendgrid_key {
-        Box::new(SendgridMailer::new(api_key))
+        Box::new(SendgridMailer::new(
+            api_key,
+            opts.email_from_address,
+            opts.email_from_name,
+        ))
     } else {
-        Box::new(ConsoleMailer {})
+        Box::new(ConsoleMailer {
+            from: format!("{} <{}>", opts.email_from_name, opts.email_from_address),
+        })
     };
 
     let tera = Tera::new("templates/**/*")?;
