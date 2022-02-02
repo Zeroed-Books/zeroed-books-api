@@ -25,7 +25,7 @@ impl Hash {
         let argon2 = Argon2::default();
 
         let password_hash = argon2
-            .hash_password_simple(password.as_bytes(), salt.as_ref())?
+            .hash_password(password.as_bytes(), salt.as_ref())?
             .to_string();
 
         Ok(Self(password_hash))
