@@ -11,7 +11,7 @@ extern crate diesel_migrations;
 #[macro_use]
 extern crate rocket;
 
-use std::net::IpAddr;
+use std::{convert::TryInto, net::IpAddr};
 
 use chrono::Duration;
 use diesel::{insert_into, RunQueryDsl};
@@ -19,8 +19,8 @@ use email::clients::{EmailClient, Message};
 use http_err::ApiError;
 use identities::{
     domain::{
-        email::{Email, EmailVerification},
-        users::NewUser,
+        email::EmailVerification,
+        users::{NewUser, NewUserData},
     },
     models::email::{EmailPersistanceError, NewEmail, NewEmailVerification},
 };
@@ -32,6 +32,7 @@ use rocket::{
     State,
 };
 use rocket_sync_db_pools::database;
+use semval::ValidatedFrom;
 use tera::{Context, Tera};
 use tracing::{error, trace};
 
@@ -45,6 +46,7 @@ mod http_err;
 mod identities;
 pub mod ledger;
 mod models;
+pub mod passwords;
 mod rate_limit;
 pub mod schema;
 mod server;
@@ -52,28 +54,32 @@ mod server;
 #[database("postgres")]
 pub struct PostgresConn(diesel::PgConnection);
 
-#[derive(Deserialize)]
-pub struct NewUserRequest<'r> {
-    email: &'r str,
-    password: &'r str,
-}
-
-#[derive(Serialize)]
-pub struct NewUserResponse {
-    email: String,
-}
-
 #[derive(Serialize)]
 pub struct RegistrationError {
+    #[serde(skip_serializing_if = "Option::is_none")]
     email: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    password: Option<Vec<String>>,
 }
 
 #[derive(Responder)]
 pub enum CreateUserResponse {
     #[response(status = 201)]
-    UserCreated(Json<NewUserResponse>),
+    UserCreated(Json<identities::http::reps::NewUserResponse>),
     #[response(status = 400)]
-    BadRequest(Json<RegistrationError>),
+    BadRequest(Json<identities::http::reps::NewUserValidationError>),
+}
+
+impl From<identities::http::reps::NewUserResponse> for CreateUserResponse {
+    fn from(response: identities::http::reps::NewUserResponse) -> Self {
+        Self::UserCreated(Json(response))
+    }
+}
+
+impl From<identities::http::reps::NewUserValidationError> for CreateUserResponse {
+    fn from(response: identities::http::reps::NewUserValidationError) -> Self {
+        Self::BadRequest(Json(response))
+    }
 }
 
 #[post("/users", data = "<new_user_data>")]
@@ -83,7 +89,7 @@ pub async fn create_user(
     email_client: &State<Box<dyn EmailClient>>,
     rate_limiter: &State<Box<dyn RateLimiter>>,
     templates: &State<Tera>,
-    new_user_data: Json<NewUserRequest<'_>>,
+    new_user_data: Json<identities::http::reps::NewUserRequest<'_>>,
 ) -> Result<CreateUserResponse, ApiError> {
     let rate_limit_key = format!("/users_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
@@ -92,39 +98,33 @@ pub async fn create_user(
         Err(err) => {
             error!(error = ?err, "Failed to query rate limiter.");
 
-            return Err(InternalServerError {
-                message: "Internal server error.".to_string(),
-            }
-            .into());
+            return Err(InternalServerError::default().into());
         }
     };
 
-    let new_user = match NewUser::new(new_user_data.password) {
+    // TODO: Validate both password and email, so both sets of errors can be
+    //       presented in the same response.
+
+    let new_user = match NewUser::validated_from(NewUserData::from(new_user_data.0)) {
         Ok(user) => user,
+        Err((_, context)) => {
+            return Ok(identities::http::reps::NewUserValidationError::from(context).into())
+        }
+    };
+
+    let user_model: models::NewUserModel = match (&new_user).try_into() {
+        Ok(model) => model,
         Err(error) => {
-            error!(?error, "Failed to create new user.");
+            error!(?error, "Failed to convert new user to model.");
 
-            return Err(InternalServerError {
-                message: "Internal server error.".to_string(),
-            }
-            .into());
+            return Err(InternalServerError::default().into());
         }
     };
-
-    let email = match Email::parse(new_user_data.email) {
-        Ok(parsed) => parsed,
-        Err(_) => {
-            return Ok(CreateUserResponse::BadRequest(Json(RegistrationError {
-                email: Some(vec!["Please enter a valid email address.".to_string()]),
-            })));
-        }
-    };
-
-    let email_model = NewEmail::for_user(new_user.id(), &email);
+    let email_model = NewEmail::for_user(new_user.id(), new_user.email());
     let new_email_id = email_model.id();
 
     let persistance_result = db
-        .run(|c| persist_new_user(c, new_user.into(), email_model))
+        .run(|c| persist_new_user(c, user_model, email_model))
         .await;
 
     if let Err(persistence_err) = persistance_result {
@@ -135,16 +135,18 @@ pub async fn create_user(
                     .expect("template failure");
 
                 let message = Message {
-                    to: email.provided_address().to_string(),
+                    to: new_user.email().address().to_owned(),
                     subject: "Duplicate Registration".to_owned(),
                     text: content,
                 };
 
                 match email_client.send(&message).await {
                     Ok(()) => {
-                        return Ok(CreateUserResponse::UserCreated(Json(NewUserResponse {
-                            email: email.provided_address().to_string(),
-                        })))
+                        return Ok(CreateUserResponse::UserCreated(Json(
+                            identities::http::reps::NewUserResponse {
+                                email: new_user.email().address().to_owned(),
+                            },
+                        )))
                     }
                     Err(e) => {
                         error!(
@@ -181,10 +183,7 @@ pub async fn create_user(
                 "Failed to save email verification model."
             );
 
-            return Err(InternalServerError {
-                message: "Internal server error.".to_owned(),
-            }
-            .into());
+            return Err(InternalServerError::default().into());
         }
     };
 
@@ -196,7 +195,7 @@ pub async fn create_user(
         .expect("template failure");
 
     let message = Message {
-        to: email.provided_address().to_string(),
+        to: new_user.email().address().to_owned(),
         subject: "Please Confirm your Email".to_owned(),
         text: content,
     };
@@ -213,9 +212,11 @@ pub async fn create_user(
         }
     }
 
-    Ok(CreateUserResponse::UserCreated(Json(NewUserResponse {
-        email: email.provided_address().to_string(),
-    })))
+    Ok(CreateUserResponse::UserCreated(Json(
+        identities::http::reps::NewUserResponse {
+            email: new_user.email().address().to_owned(),
+        },
+    )))
 }
 
 fn persist_new_user(

@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use crate::{identities::domain::users::NewUser, schema::user};
 use diesel::Insertable;
 use uuid::Uuid;
@@ -10,11 +12,13 @@ pub struct NewUserModel {
     pub password_hash: String,
 }
 
-impl From<NewUser> for NewUserModel {
-    fn from(user: NewUser) -> Self {
-        Self {
+impl TryFrom<&NewUser> for NewUserModel {
+    type Error = anyhow::Error;
+
+    fn try_from(user: &NewUser) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: user.id(),
-            password_hash: user.password_hash().to_string(),
-        }
+            password_hash: user.password_hash()?.value().to_owned(),
+        })
     }
 }
