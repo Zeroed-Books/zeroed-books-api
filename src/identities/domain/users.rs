@@ -1,58 +1,89 @@
 use anyhow::Result;
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use rand_core::OsRng;
+use semval::prelude::*;
 use uuid::Uuid;
 
+use crate::passwords::{self, Password, PasswordInvalidity};
+
+use super::email::{Email, EmailInvalidity};
+
+#[derive(Debug)]
 pub struct NewUser {
     id: Uuid,
-    password_hash: String,
+    email: Email,
+    password: Password,
 }
 
 impl NewUser {
-    /// Create a representation of a new user.
-    ///
-    /// # Arguments
-    ///
-    /// * `password` - The user's raw password as a string.
-    pub fn new(password: &str) -> Result<Self> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        let password_hash = argon2
-            .hash_password_simple(password.as_bytes(), salt.as_ref())?
-            .to_string();
-
-        Ok(Self {
-            id: Uuid::new_v4(),
-            password_hash,
-        })
-    }
-
     pub fn id(&self) -> Uuid {
         self.id
     }
 
-    pub fn password_hash(&self) -> &str {
-        &self.password_hash
+    pub fn email(&self) -> &Email {
+        &self.email
+    }
+
+    pub fn password_hash(&self) -> Result<passwords::Hash> {
+        passwords::Hash::new(&self.password)
+    }
+}
+
+#[derive(Debug)]
+pub enum NewUserInvalidity {
+    Email(EmailInvalidity),
+    Password(PasswordInvalidity),
+}
+
+impl Validate for NewUser {
+    type Invalidity = NewUserInvalidity;
+
+    fn validate(&self) -> ValidationResult<Self::Invalidity> {
+        ValidationContext::new()
+            .validate_with(&self.email, NewUserInvalidity::Email)
+            .validate_with(&self.password, NewUserInvalidity::Password)
+            .into()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NewUserData<'a> {
+    pub email: &'a str,
+    pub password: &'a str,
+}
+
+impl<'a> ValidatedFrom<NewUserData<'a>> for NewUser {
+    fn validated_from(from: NewUserData<'a>) -> ValidatedResult<Self> {
+        let into = NewUser {
+            id: Uuid::new_v4(),
+            email: Email::unvalidated(from.email.to_owned()),
+            password: Password::unvalidated(from.password.to_owned()),
+        };
+
+        match into.validate() {
+            Ok(()) => Ok(into),
+            Err(context) => Err((into, context)),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use argon2::{PasswordHash, PasswordVerifier};
 
     use super::*;
 
     #[test]
-    fn new_user_password_hash_matches() {
-        let sample_password = "hunter2";
-        let new_user = NewUser::new(sample_password).expect("user creation should succeed");
+    pub fn validated_from_valid() -> Result<()> {
+        let data = NewUserData {
+            email: "test@example.com",
+            password: "CorrectHorseBatteryStaple",
+        };
 
-        let parsed_hash =
-            PasswordHash::new(new_user.password_hash()).expect("invalid password hash");
+        let new_user = NewUser::validated_from(data).expect("user should be valid");
 
-        assert!(Argon2::default()
-            .verify_password(sample_password.as_bytes(), &parsed_hash)
-            .is_ok());
+        assert_eq!(data.email, new_user.email().address());
+        assert!(new_user
+            .password_hash()?
+            .matches_raw_password(data.password)?);
+
+        Ok(())
     }
 }

@@ -1819,6 +1819,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "semval"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87399ce75dcd309d135741ee5b84814c19e8c68c5b944221a9617669d8b54929"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1965,9 +1974,9 @@ checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
 
 [[package]]
 name = "smallvec"
-version = "1.6.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
+checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
 
 [[package]]
 name = "socket2"
@@ -2695,6 +2704,7 @@ dependencies = [
  "redis",
  "rocket",
  "rocket_sync_db_pools",
+ "semval",
  "sendgrid",
  "serde",
  "serde_json",

@@ -29,8 +29,8 @@ impl NewEmail {
         Self {
             id: Uuid::new_v4(),
             user_id,
-            provided_address: email.provided_address().to_owned(),
-            normalized_address: email.normalized_address().to_owned(),
+            provided_address: email.address().to_owned(),
+            normalized_address: email.address().to_owned(),
         }
     }
 

@@ -1,7 +1,6 @@
 use std::net::IpAddr;
 
 use anyhow::Result;
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use rocket::{
     http::{Cookie, CookieJar},
     serde::json::Json,
@@ -13,6 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     http_err::{ApiError, InternalServerError},
+    passwords,
     rate_limit::{RateLimitResult, RateLimiter},
     PostgresConn,
 };
@@ -85,21 +85,17 @@ async fn create_cookie_session(
         }
     };
 
-    let parsed_hash = match PasswordHash::new(&user_model.password_hash) {
+    let parsed_hash = match passwords::Hash::from_hash_str(&user_model.password_hash) {
         Ok(hash) => hash,
         Err(error) => {
-            error!(?error, "Invalid password hash received.");
+            error!(?error, "Invalid password hash received from model.");
 
-            return Err(InternalServerError {
-                message: "Internal server error.".to_string(),
-            }
-            .into());
+            return Err(InternalServerError::default().into());
         }
     };
 
-    let argon2 = Argon2::default();
-    match argon2.verify_password(credentials.password.as_bytes(), &parsed_hash) {
-        Ok(()) => {
+    match parsed_hash.matches_raw_password(&credentials.password) {
+        Ok(true) => {
             debug!(user_id = %user_model.id, "Validated user credentials.");
 
             let session = Session::new_for_user(user_model.id);
@@ -110,7 +106,7 @@ async fn create_cookie_session(
 
             Ok(CreateSessionResponse::Created(()))
         }
-        Err(password_hash::Error::Password) => Ok(CreateSessionResponse::BadRequest(Json(
+        Ok(false) => Ok(CreateSessionResponse::BadRequest(Json(
             SessionCreationError {
                 message: "Invalid email or password.".to_string(),
             },
