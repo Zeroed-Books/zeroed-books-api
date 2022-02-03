@@ -53,6 +53,7 @@ pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
         .manage(tera)
         .mount("/", routes![create_user, verify_email])
         .mount("/authentication", crate::authentication::http::routes())
+        .mount("/identities", crate::identities::http::routes())
         .mount("/ledger", crate::ledger::http::routes()))
 }
 

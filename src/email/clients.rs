@@ -1,5 +1,4 @@
-use std::error::Error;
-
+use anyhow::Result;
 use sendgrid::v3::{Content, Email, Personalization, Sender};
 use tracing::info;
 
@@ -11,7 +10,7 @@ pub struct Message {
 
 #[async_trait]
 pub trait EmailClient: Send + Sync {
-    async fn send(&self, message: &Message) -> Result<(), Box<dyn Error>>;
+    async fn send(&self, message: &Message) -> Result<()>;
 }
 
 pub struct ConsoleMailer {
@@ -20,7 +19,7 @@ pub struct ConsoleMailer {
 
 #[async_trait]
 impl EmailClient for ConsoleMailer {
-    async fn send(&self, message: &Message) -> Result<(), Box<dyn Error>> {
+    async fn send(&self, message: &Message) -> Result<()> {
         println!("From: {}", self.from);
         println!("To: {}", message.to);
         println!("Subject: {}", message.subject);
@@ -47,7 +46,7 @@ impl SendgridMailer {
 
 #[async_trait]
 impl EmailClient for SendgridMailer {
-    async fn send(&self, message: &Message) -> Result<(), Box<dyn Error>> {
+    async fn send(&self, message: &Message) -> Result<()> {
         let personalization = Personalization::new(Email::new(message.to.to_owned()));
 
         let sendable_message = sendgrid::v3::Message::new(self.from.clone())
@@ -59,13 +58,9 @@ impl EmailClient for SendgridMailer {
             )
             .add_personalization(personalization);
 
-        match self.sender.send(&sendable_message).await {
-            Ok(_) => {
-                info!(subject = %message.subject, "Sent email via SendGrid.");
+        self.sender.send(&sendable_message).await?;
+        info!(subject = %message.subject, "Sent email via SendGrid.");
 
-                Ok(())
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+        Ok(())
     }
 }

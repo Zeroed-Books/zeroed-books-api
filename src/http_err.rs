@@ -47,6 +47,8 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
+pub type ApiResponse<T> = Result<T, ApiError>;
+
 #[derive(Serialize)]
 pub struct ErrorRep {
     pub message: String,
