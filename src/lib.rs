@@ -150,7 +150,7 @@ pub async fn create_user(
                     }
                     Err(e) => {
                         error!(
-                            error = e.as_ref(),
+                            error = ?e,
                             "Failed to send duplicate registration email."
                         );
 
@@ -203,7 +203,7 @@ pub async fn create_user(
     match email_client.send(&message).await {
         Ok(()) => (),
         Err(e) => {
-            error!(error = e.as_ref(), "Failed to send verification email.");
+            error!(error = ?e, "Failed to send verification email.");
 
             return Err(InternalServerError {
                 message: "Internal server error.".to_owned(),

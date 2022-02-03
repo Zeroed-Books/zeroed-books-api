@@ -64,3 +64,32 @@ impl From<ValidationContext<NewUserInvalidity>> for NewUserValidationError {
         response
     }
 }
+
+#[derive(Deserialize, Serialize)]
+pub struct PasswordResetRequest<'r> {
+    pub email: &'r str,
+}
+
+#[derive(Default, Serialize)]
+pub struct PasswordResetError {
+    email: Vec<String>,
+}
+
+impl From<ValidationContext<EmailInvalidity>> for PasswordResetError {
+    fn from(validation: ValidationContext<EmailInvalidity>) -> Self {
+        let mut response = PasswordResetError::default();
+
+        for invalidity in validation.into_iter() {
+            match invalidity {
+                EmailInvalidity::MissingDomain => {
+                    response.email.push("Email is missing a domain.".to_owned())
+                }
+                EmailInvalidity::MissingSeparator => response
+                    .email
+                    .push("Email is missing an '@' symbol.".to_owned()),
+            }
+        }
+
+        response
+    }
+}
