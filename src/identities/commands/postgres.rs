@@ -20,7 +20,7 @@ pub struct PostgresCommands<'a>(pub &'a PostgresConn);
 impl<'a> PasswordResetCommands for PostgresCommands<'a> {
     async fn create_reset_token(
         &self,
-        password_reset: domain::password_resets::PasswordReset,
+        password_reset: domain::password_resets::NewPasswordReset,
         mailer: &dyn EmailClient,
         tera: &Tera,
     ) -> Result<()> {

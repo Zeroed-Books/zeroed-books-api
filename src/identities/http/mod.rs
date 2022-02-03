@@ -15,7 +15,7 @@ use crate::{
 
 use super::{
     commands::{postgres::PostgresCommands, PasswordResetCommands},
-    domain::password_resets::PasswordReset,
+    domain::password_resets::NewPasswordReset,
 };
 
 pub mod reps;
@@ -64,7 +64,7 @@ async fn create_password_reset_request<'r>(
         }
     };
 
-    let password_reset = match PasswordReset::validated_from(reset_request.email) {
+    let password_reset = match NewPasswordReset::validated_from(reset_request.email) {
         Ok(reset) => reset,
         Err((_, context)) => {
             return Ok(reps::PasswordResetError::from(context).into());

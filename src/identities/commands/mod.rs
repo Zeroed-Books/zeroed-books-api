@@ -3,7 +3,7 @@ use tera::Tera;
 
 use crate::email::clients::EmailClient;
 
-use super::domain::password_resets::PasswordReset;
+use super::domain::password_resets::NewPasswordReset;
 
 pub mod postgres;
 
@@ -11,7 +11,7 @@ pub mod postgres;
 pub trait PasswordResetCommands {
     async fn create_reset_token(
         &self,
-        password_reset: PasswordReset,
+        password_reset: NewPasswordReset,
         mailer: &dyn EmailClient,
         tera: &Tera,
     ) -> Result<()>;

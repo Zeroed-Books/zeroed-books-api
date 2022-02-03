@@ -4,13 +4,13 @@ use semval::prelude::*;
 use super::email::{Email, EmailInvalidity};
 
 #[derive(Debug)]
-pub struct PasswordReset {
+pub struct NewPasswordReset {
     email: Email,
     token: String,
 }
 
 const RESET_TOKEN_LENGTH: usize = 64;
-impl PasswordReset {
+impl NewPasswordReset {
     /// Create a new password reset.
     ///
     /// # Arguments
@@ -40,7 +40,7 @@ impl PasswordReset {
     }
 }
 
-impl Validate for PasswordReset {
+impl Validate for NewPasswordReset {
     type Invalidity = EmailInvalidity;
 
     fn validate(&self) -> ValidationResult<Self::Invalidity> {
@@ -48,7 +48,7 @@ impl Validate for PasswordReset {
     }
 }
 
-impl ValidatedFrom<&str> for PasswordReset {
+impl ValidatedFrom<&str> for NewPasswordReset {
     fn validated_from(from: &str) -> ValidatedResult<Self> {
         let into = Self::new(Email::unvalidated(from.to_owned()));
 
@@ -65,7 +65,7 @@ mod test {
 
     #[test]
     fn validated_from_invalid_email() {
-        let (_, context) = PasswordReset::validated_from("some-invalid-email")
+        let (_, context) = NewPasswordReset::validated_from("some-invalid-email")
             .expect_err("invalid email should not validate");
         let errors = context.into_iter().collect::<Vec<_>>();
 
@@ -74,8 +74,8 @@ mod test {
 
     #[test]
     fn validated_from_valid_email() {
-        let reset =
-            PasswordReset::validated_from("test@example.com").expect("valid email should validate");
+        let reset = NewPasswordReset::validated_from("test@example.com")
+            .expect("valid email should validate");
 
         assert_eq!(RESET_TOKEN_LENGTH, reset.token().len());
     }
