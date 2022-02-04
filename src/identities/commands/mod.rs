@@ -1,9 +1,9 @@
 use anyhow::Result;
 use tera::Tera;
 
-use crate::email::clients::EmailClient;
+use crate::{email::clients::EmailClient, passwords::Password};
 
-use super::domain::password_resets::NewPasswordReset;
+use super::domain::password_resets::{NewPasswordReset, PasswordResetToken};
 
 pub mod postgres;
 
@@ -14,5 +14,14 @@ pub trait PasswordResetCommands {
         password_reset: NewPasswordReset,
         mailer: &dyn EmailClient,
         tera: &Tera,
+    ) -> Result<()>;
+}
+
+#[async_trait]
+pub trait UserCommands {
+    async fn reset_user_password(
+        &self,
+        token: PasswordResetToken,
+        password: Password,
     ) -> Result<()>;
 }

@@ -2,7 +2,13 @@ use semval::context::Context as ValidationContext;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    identities::domain::{self, email::EmailInvalidity, users::NewUserInvalidity},
+    identities::{
+        domain::{
+            self, email::EmailInvalidity, password_resets::PasswordResetTokenInvalidity,
+            users::NewUserInvalidity,
+        },
+        queries,
+    },
     passwords::PasswordInvalidity,
 };
 
@@ -71,13 +77,13 @@ pub struct PasswordResetRequest<'r> {
 }
 
 #[derive(Default, Serialize)]
-pub struct PasswordResetError {
+pub struct PasswordResetRequestError {
     email: Vec<String>,
 }
 
-impl From<ValidationContext<EmailInvalidity>> for PasswordResetError {
+impl From<ValidationContext<EmailInvalidity>> for PasswordResetRequestError {
     fn from(validation: ValidationContext<EmailInvalidity>) -> Self {
-        let mut response = PasswordResetError::default();
+        let mut response = PasswordResetRequestError::default();
 
         for invalidity in validation.into_iter() {
             match invalidity {
@@ -91,5 +97,62 @@ impl From<ValidationContext<EmailInvalidity>> for PasswordResetError {
         }
 
         response
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PasswordReset<'r> {
+    pub token: &'r str,
+    pub new_password: &'r str,
+}
+
+#[derive(Default, Serialize)]
+pub struct PasswordResetError {
+    new_password: Vec<String>,
+    token: Vec<String>,
+}
+
+impl From<ValidationContext<PasswordInvalidity>> for PasswordResetError {
+    fn from(validation: ValidationContext<PasswordInvalidity>) -> Self {
+        let mut response = Self::default();
+
+        for invalidity in validation.into_iter() {
+            match invalidity {
+                PasswordInvalidity::MaxLength(max) => response.new_password.push(format!(
+                    "Passwords may not contain more than {} characters.",
+                    max
+                )),
+                PasswordInvalidity::MinLength(min) => response.new_password.push(format!(
+                    "Passwords must contain at least {} characters.",
+                    min
+                )),
+            }
+        }
+
+        response
+    }
+}
+
+impl From<ValidationContext<PasswordResetTokenInvalidity>> for PasswordResetError {
+    fn from(validation: ValidationContext<PasswordResetTokenInvalidity>) -> Self {
+        let mut response = Self::default();
+
+        if validation.into_iter().next().is_some() {
+            response.token =
+                vec!["The provided password reset token has expired or does not exist.".to_owned()];
+        }
+
+        response
+    }
+}
+
+impl From<queries::PasswordResetError> for PasswordResetError {
+    fn from(_error: queries::PasswordResetError) -> Self {
+        Self {
+            new_password: vec![],
+            token: vec![
+                "The provided password reset token has expired or does not exist.".to_owned(),
+            ],
+        }
     }
 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use tera::{Context, Tera};
-use tracing::info;
+use tracing::{debug, info};
 use uuid::Uuid;
 
 use crate::{
@@ -9,10 +9,11 @@ use crate::{
         domain,
         models::password_resets::{NewPasswordReset, PasswordReset as PasswordResetModel},
     },
+    passwords::{self, Password},
     PostgresConn,
 };
 
-use super::PasswordResetCommands;
+use super::{PasswordResetCommands, UserCommands};
 
 pub struct PostgresCommands<'a>(pub &'a PostgresConn);
 
@@ -93,6 +94,48 @@ impl<'a> PasswordResetCommands for PostgresCommands<'a> {
                 info!("Sent password reset attempt notification to unverified email.");
             }
         }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<'a> UserCommands for PostgresCommands<'a> {
+    async fn reset_user_password(
+        &self,
+        reset_token: domain::password_resets::PasswordResetToken,
+        password: Password,
+    ) -> Result<()> {
+        let user_id = reset_token.user_id();
+        let hash = passwords::Hash::new(&password)?;
+
+        self.0
+            .run(move |conn| {
+                use diesel::prelude::*;
+
+                {
+                    use crate::schema::user::dsl::*;
+
+                    diesel::update(user)
+                        .set(password.eq(hash.value()))
+                        .filter(id.eq(user_id))
+                        .execute(conn)?;
+                }
+
+                debug!(%user_id, "Changed user's password using reset token.");
+
+                {
+                    use crate::schema::password_resets::dsl::*;
+
+                    diesel::delete(password_resets)
+                        .filter(token.eq(reset_token.token()))
+                        .execute(conn)
+                }
+            })
+            .await?;
+
+        debug!(%user_id, "Deleted password reset token.");
+        info!(%user_id, "Reset user's password.");
 
         Ok(())
     }
