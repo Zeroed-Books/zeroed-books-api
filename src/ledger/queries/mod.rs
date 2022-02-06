@@ -38,12 +38,6 @@ pub trait TransactionQueries {
         transaction_id: Uuid,
     ) -> anyhow::Result<Option<domain::transactions::Transaction>>;
 
-    #[deprecated(note = "Use list_transactions instead.")]
-    async fn latest_transactions(
-        &self,
-        user_id: Uuid,
-    ) -> anyhow::Result<Vec<domain::transactions::Transaction>>;
-
     async fn list_transactions(&self, query: TransactionQuery) -> Result<TransactionCollection>;
 }
 
