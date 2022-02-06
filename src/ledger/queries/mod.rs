@@ -2,6 +2,7 @@ pub mod postgres;
 
 use std::collections::HashMap;
 
+use anyhow::Result;
 use uuid::Uuid;
 
 use super::domain;
@@ -37,8 +38,23 @@ pub trait TransactionQueries {
         transaction_id: Uuid,
     ) -> anyhow::Result<Option<domain::transactions::Transaction>>;
 
+    #[deprecated(note = "Use list_transactions instead.")]
     async fn latest_transactions(
         &self,
         user_id: Uuid,
     ) -> anyhow::Result<Vec<domain::transactions::Transaction>>;
+
+    async fn list_transactions(&self, query: TransactionQuery) -> Result<TransactionCollection>;
+}
+
+#[derive(Default)]
+pub struct TransactionQuery {
+    pub user_id: Uuid,
+    pub after: Option<domain::transactions::TransactionCursor>,
+    pub account: Option<String>,
+}
+
+pub struct TransactionCollection {
+    pub next: Option<domain::transactions::TransactionCursor>,
+    pub items: Vec<domain::transactions::Transaction>,
 }

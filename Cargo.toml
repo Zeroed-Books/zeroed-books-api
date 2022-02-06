@@ -13,6 +13,7 @@ path = "src/main.rs"
 anyhow = "1.0"
 argon2 = { version = "0.3.3", features = ["std"] }
 async-trait = "0.1.52"
+base64 = "0.13.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = { version = "3.0", features = ["derive", "env"]}
 diesel = { version = "1.4.8", features = ["chrono", "postgres", "uuidv07"] }
