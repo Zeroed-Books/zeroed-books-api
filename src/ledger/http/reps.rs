@@ -1,7 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
+use anyhow::Result;
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
+use rocket::form::{self, error::ErrorKind, FromFormField, ValueField};
+use serde::{Deserialize, Serialize, Serializer};
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::ledger::domain::{
@@ -9,7 +15,8 @@ use crate::ledger::domain::{
 };
 
 #[derive(Serialize)]
-pub struct ResourceCollection<T: Serialize> {
+pub struct ResourceCollection<T: Serialize, C: Serialize> {
+    pub next: Option<C>,
     pub items: Vec<T>,
 }
 
@@ -129,6 +136,105 @@ impl From<NewTransactionError> for TransactionValidationError {
                 message: Some("The entries in the transaction are unbalanced.".to_string()),
             },
         }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct TransactionCursor {
+    pub after_date: NaiveDate,
+    pub after_created_at: DateTime<Utc>,
+}
+
+impl From<&TransactionCursor> for domain::transactions::TransactionCursor {
+    fn from(cursor: &TransactionCursor) -> Self {
+        Self {
+            after_date: cursor.after_date,
+            after_created_at: cursor.after_created_at,
+        }
+    }
+}
+
+impl From<domain::transactions::TransactionCursor> for TransactionCursor {
+    fn from(cursor: domain::transactions::TransactionCursor) -> Self {
+        Self {
+            after_date: cursor.after_date,
+            after_created_at: cursor.after_created_at,
+        }
+    }
+}
+
+pub struct EncodedTransactionCursor(TransactionCursor);
+
+impl From<domain::transactions::TransactionCursor> for EncodedTransactionCursor {
+    fn from(cursor: domain::transactions::TransactionCursor) -> Self {
+        Self(cursor.into())
+    }
+}
+
+impl<'r> FromFormField<'r> for TransactionCursor {
+    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
+        debug!(value = %field.value, "Decoding transaction cursor.");
+
+        Ok(
+            serde_json::from_value::<EncodedTransactionCursor>(serde_json::Value::String(
+                field.value.to_owned(),
+            ))
+            .map(|encoded| encoded.0)
+            .map_err(|err| ErrorKind::Validation(Cow::from(err.to_string())))?,
+        )
+    }
+}
+
+impl Serialize for EncodedTransactionCursor {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let encoded = format!(
+            "{}/{}",
+            self.0.after_date.format("%Y-%m-%d"),
+            self.0.after_created_at.to_rfc3339()
+        );
+
+        serializer.collect_str(&base64::encode(encoded))
+    }
+}
+
+impl<'de> Deserialize<'de> for EncodedTransactionCursor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Vis;
+        impl serde::de::Visitor<'_> for Vis {
+            type Value = EncodedTransactionCursor;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a base64 encoded transaction cursor")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                let formatted = base64::decode(v)
+                    .map(String::from_utf8)
+                    .map_err(serde::de::Error::custom)?
+                    .map_err(serde::de::Error::custom)?;
+
+                match formatted.split_once("/") {
+                    Some((str_date, str_created_at)) => {
+                        let date = NaiveDate::parse_from_str(str_date, "%Y-%m-%d")
+                            .map_err(serde::de::Error::custom)?;
+                        let created_at = str_created_at
+                            .parse::<DateTime<Utc>>()
+                            .map_err(serde::de::Error::custom)?;
+
+                        Ok(EncodedTransactionCursor(TransactionCursor {
+                            after_date: date,
+                            after_created_at: created_at,
+                        }))
+                    }
+                    None => Err(serde::de::Error::custom("improperly encoded cursor")),
+                }
+            }
+        }
+
+        deserializer.deserialize_str(Vis)
     }
 }
 

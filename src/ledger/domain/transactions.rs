@@ -161,6 +161,14 @@ impl TransactionEntry {
     }
 }
 
+/// A cursor into a collection of transactions. Since transactions are always
+/// ordered by descending date and creation time, we can use those fields to
+/// mark arbitrary locations in the collection.
+pub struct TransactionCursor {
+    pub after_date: NaiveDate,
+    pub after_created_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod test {
 

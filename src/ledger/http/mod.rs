@@ -13,7 +13,7 @@ use crate::{
 use super::{
     commands::{postgres::PostgresCommands, TransactionCommands, UpdateTransactionError},
     domain,
-    queries::{postgres::PostgresQueries, CurrencyQueries, TransactionQueries},
+    queries::{self, postgres::PostgresQueries, CurrencyQueries, TransactionQueries},
 };
 
 pub mod reps;
@@ -88,16 +88,28 @@ async fn get_transaction(
     }
 }
 
-#[get("/transactions")]
+#[get("/transactions?<after>&<account>")]
 async fn get_transactions(
     session: Session,
     db: PostgresConn,
-) -> Result<Json<reps::ResourceCollection<reps::Transaction>>, ApiError> {
+    account: Option<&'_ str>,
+    after: Option<reps::TransactionCursor>,
+) -> Result<
+    Json<reps::ResourceCollection<reps::Transaction, reps::EncodedTransactionCursor>>,
+    ApiError,
+> {
     let queries = PostgresQueries(&db);
 
-    match queries.latest_transactions(session.user_id()).await {
+    let query = queries::TransactionQuery {
+        user_id: session.user_id(),
+        after: after.as_ref().map(Into::into),
+        account: account.map(String::from),
+    };
+    match queries.list_transactions(query).await {
         Ok(transactions) => Ok(Json(reps::ResourceCollection {
+            next: transactions.next.map(Into::into),
             items: transactions
+                .items
                 .iter()
                 .map(|transaction| transaction.into())
                 .collect(),
