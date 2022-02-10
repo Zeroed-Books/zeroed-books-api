@@ -49,4 +49,6 @@ WORKDIR /zeroed-books
 COPY --from=builder /usr/src/zeroed-books-api/target/release/zeroed-books-api ./
 COPY templates ./templates
 
+USER zeroed-books:zeroed-books
+
 ENTRYPOINT [ "/zeroed-books/zeroed-books-api" ]
