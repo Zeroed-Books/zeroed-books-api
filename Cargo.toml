@@ -19,7 +19,7 @@ clap = { version = "3.0", features = ["derive", "env"]}
 diesel = { version = "1.4.8", features = ["chrono", "postgres", "uuidv07"] }
 diesel_migrations = { version = "1.4.0", features = ["postgres"] }
 password-hash = "0.3"
-rand = "0.8.4"
+rand = "0.8.5"
 rand_core = { version = "0.6", features = ["std"] }
 redis = "0.21.5"
 rocket = { version = "0.5.0-rc.1", features = ["json", "secrets", "uuid"] }
