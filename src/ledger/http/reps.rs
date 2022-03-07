@@ -216,7 +216,7 @@ impl<'de> Deserialize<'de> for EncodedTransactionCursor {
                     .map_err(serde::de::Error::custom)?
                     .map_err(serde::de::Error::custom)?;
 
-                match formatted.split_once("/") {
+                match formatted.split_once('/') {
                     Some((str_date, str_created_at)) => {
                         let date = NaiveDate::parse_from_str(str_date, "%Y-%m-%d")
                             .map_err(serde::de::Error::custom)?;

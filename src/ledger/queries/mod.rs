@@ -1,3 +1,8 @@
+//! Queries for ledger information.
+//!
+//! Queries fetch information from whatever storage is backing the application.
+//! They never modify data.
+
 pub mod postgres;
 
 use std::collections::HashMap;
@@ -5,7 +10,28 @@ use std::collections::HashMap;
 use anyhow::Result;
 use uuid::Uuid;
 
-use super::domain;
+use super::domain::{self, currency::CurrencyAmount};
+
+/// Queries for account information.
+#[async_trait]
+pub trait AccountQueries {
+    /// Get the balance for an account.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - ID of the user who owns the account.
+    /// * `account_name` - The name of the account.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec`] of balances for each currency used in transactions attached to
+    /// the specified account.
+    async fn get_account_balance(
+        &self,
+        user_id: Uuid,
+        account_name: String,
+    ) -> Result<Vec<CurrencyAmount>>;
+}
 
 #[async_trait]
 pub trait CurrencyQueries {
