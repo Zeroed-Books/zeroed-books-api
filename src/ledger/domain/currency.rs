@@ -49,7 +49,7 @@ impl Currency {
         let decimal = ".";
         let separator = ",";
 
-        let cleaned_amount = raw_amount.replace(separator, "").replace(" ", "");
+        let cleaned_amount = raw_amount.replace(separator, "").replace(' ', "");
 
         let number_to_parse = match cleaned_amount.rsplit_once(decimal) {
             // The number has no decimals, so pad it with the appropriate number
@@ -89,6 +89,10 @@ impl Currency {
     }
 }
 
+/// An amount associated with a specific currency.
+///
+/// The amount is always stored as a whole number, so the value depends on the
+/// associated currency's minor units.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CurrencyAmount {
     currency: Currency,
@@ -116,7 +120,7 @@ impl CurrencyAmount {
 
     pub fn format_value(&self) -> String {
         let amount_str = self.value.to_string();
-        let decimal_location = amount_str.len() - Into::<usize>::into(self.currency.minor_units);
+        let decimal_location = amount_str.len() - usize::from(self.currency.minor_units);
 
         let whole_part = &amount_str[..decimal_location];
         let decimal_part = &amount_str[decimal_location..];

@@ -6,14 +6,16 @@ use uuid::Uuid;
 
 use crate::{
     authentication::domain::session::Session,
-    http_err::{ApiError, ErrorRep, InternalServerError},
+    http_err::{ApiError, ApiResponse, ErrorRep, InternalServerError},
     PostgresConn,
 };
 
 use super::{
     commands::{postgres::PostgresCommands, TransactionCommands, UpdateTransactionError},
     domain,
-    queries::{self, postgres::PostgresQueries, CurrencyQueries, TransactionQueries},
+    queries::{
+        self, postgres::PostgresQueries, AccountQueries, CurrencyQueries, TransactionQueries,
+    },
 };
 
 pub mod reps;
@@ -22,6 +24,7 @@ pub fn routes() -> Vec<Route> {
     routes![
         create_transaction,
         delete_transaction,
+        get_account_balance,
         get_transaction,
         get_transactions,
         update_transaction,
@@ -43,6 +46,29 @@ async fn delete_transaction(
         Ok(()) => Ok(Status::NoContent),
         Err(error) => {
             error!(?error, "Failed to delete transaction.");
+
+            Err(InternalServerError::default().into())
+        }
+    }
+}
+
+#[get("/accounts/<account>/balance")]
+async fn get_account_balance(
+    db: PostgresConn,
+    session: Session,
+    account: &str,
+) -> ApiResponse<Json<Vec<reps::CurrencyAmount>>> {
+    let queries = PostgresQueries(&db);
+
+    match queries
+        .get_account_balance(session.user_id(), account.to_owned())
+        .await
+    {
+        Ok(balances) => Ok(Json(
+            balances.iter().map(reps::CurrencyAmount::from).collect(),
+        )),
+        Err(error) => {
+            error!(%account, ?error, "Failed to query for account balance.");
 
             Err(InternalServerError::default().into())
         }

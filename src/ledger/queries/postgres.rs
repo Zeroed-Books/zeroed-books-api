@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::Result;
+use diesel::sql_query;
 use tracing::{debug, trace};
 use uuid::Uuid;
 
@@ -12,9 +13,89 @@ use crate::{
     schema, PostgresConn,
 };
 
-use super::{CurrencyQueries, TransactionCollection, TransactionQueries, TransactionQuery};
+use super::{
+    AccountQueries, CurrencyQueries, TransactionCollection, TransactionQueries, TransactionQuery,
+};
 
+/// A struct to provide queries for the Postgres database backing the
+/// application.
 pub struct PostgresQueries<'a>(pub &'a PostgresConn);
+
+#[derive(QueryableByName)]
+struct CurrencyBalance {
+    #[sql_type = "diesel::sql_types::Text"]
+    pub currency: String,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    pub amount: i64,
+}
+
+#[async_trait]
+impl<'a> AccountQueries for PostgresQueries<'a> {
+    async fn get_account_balance(
+        &self,
+        user_id: Uuid,
+        account_name: String,
+    ) -> Result<Vec<domain::currency::CurrencyAmount>> {
+        let balances = self
+            .0
+            .run::<_, Result<_>>(move |conn| {
+                use diesel::prelude::*;
+                use diesel::sql_types;
+
+                let amounts_query = sql_query(
+                    r#"
+                        SELECT e."currency", COALESCE(SUM(e."amount"), 0) AS amount
+                            FROM transaction_entry e
+                                JOIN account a ON a.id = e.account_id
+                                JOIN transaction t ON t.id = e.transaction_id
+                        WHERE
+                            t.user_id = $1
+                            AND
+                                (a.name = $2 OR a.name LIKE $2 || ':%')
+                        GROUP BY e.currency
+                        ORDER BY e.currency
+                    "#,
+                )
+                .bind::<sql_types::Uuid, _>(user_id)
+                .bind::<sql_types::Text, _>(&account_name);
+
+                trace!(
+                    account = %account_name,
+                    query = %diesel::debug_query(&amounts_query),
+                    "Fetching account balance."
+                );
+
+                let amounts = amounts_query.load::<CurrencyBalance>(conn)?;
+
+                let currency_codes = amounts
+                    .iter()
+                    .map(|balance| &balance.currency)
+                    .collect::<Vec<_>>();
+
+                let mut currencies = {
+                    use schema::currency::dsl::*;
+
+                    currency
+                        .filter(code.eq_any(currency_codes))
+                        .order_by(code)
+                        .load::<models::Currency>(conn)?
+                };
+
+                Ok(currencies.drain(..).zip(amounts).collect::<Vec<_>>())
+            })
+            .await?;
+
+        Ok(balances
+            .iter()
+            .map(|(currency, amount)| {
+                Ok(domain::currency::CurrencyAmount::from_minor(
+                    domain::currency::Currency::try_from(currency)?,
+                    amount.amount.try_into().unwrap(),
+                ))
+            })
+            .collect::<Result<_>>()?)
+    }
+}
 
 #[async_trait]
 impl<'a> CurrencyQueries for PostgresQueries<'a> {
