@@ -25,6 +25,7 @@ pub fn routes() -> Vec<Route> {
         create_transaction,
         delete_transaction,
         get_account_balance,
+        get_accounts,
         get_transaction,
         get_transactions,
         update_transaction,
@@ -69,6 +70,27 @@ async fn get_account_balance(
         )),
         Err(error) => {
             error!(%account, ?error, "Failed to query for account balance.");
+
+            Err(InternalServerError::default().into())
+        }
+    }
+}
+
+#[get("/accounts?<query>")]
+async fn get_accounts(
+    db: PostgresConn,
+    session: Session,
+    query: Option<String>,
+) -> ApiResponse<Json<Vec<String>>> {
+    let queries = PostgresQueries(&db);
+
+    match queries
+        .list_accounts_by_popularity(session.user_id(), query)
+        .await
+    {
+        Ok(accounts) => Ok(Json(accounts)),
+        Err(error) => {
+            error!(?error, "Failed to list accounts.");
 
             Err(InternalServerError::default().into())
         }

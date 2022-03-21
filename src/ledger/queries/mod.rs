@@ -31,6 +31,25 @@ pub trait AccountQueries {
         user_id: Uuid,
         account_name: String,
     ) -> Result<Vec<CurrencyAmount>>;
+
+    /// List accounts by popularity.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - The ID of the user to list accounts for.
+    /// * `search_string` - An optional search string used to match account
+    ///   names. If given, only accounts containing the given search string will
+    ///   be matched.
+    ///
+    /// # Returns
+    ///
+    /// A list of account names ranked by the number of transaction entries
+    /// associated with them.
+    async fn list_accounts_by_popularity(
+        &self,
+        user_id: Uuid,
+        search_string: Option<String>,
+    ) -> Result<Vec<String>>;
 }
 
 #[async_trait]

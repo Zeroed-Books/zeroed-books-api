@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::Result;
-use diesel::sql_query;
+use diesel::{sql_query, sql_types};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
@@ -94,6 +94,43 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
                 ))
             })
             .collect::<Result<_>>()?)
+    }
+
+    async fn list_accounts_by_popularity(
+        &self,
+        user_id: Uuid,
+        search: Option<String>,
+    ) -> Result<Vec<String>> {
+        Ok(self
+            .0
+            .run::<_, Result<_>>(move |conn| {
+                use diesel::dsl::sql;
+                use diesel::prelude::*;
+
+                let mut query = schema::transaction_entry::table
+                    .inner_join(schema::account::table)
+                    .select(schema::account::name)
+                    .filter(schema::account::user_id.eq(user_id))
+                    .group_by(schema::account::id)
+                    .order(sql::<sql_types::Integer>("COUNT(transaction_entry.*)").desc())
+                    .limit(10)
+                    .into_boxed();
+
+                if let Some(search_str) = search {
+                    query = query.filter(
+                        schema::account::name.ilike(
+                            sql("'%' || ")
+                                .bind::<sql_types::Text, _>(search_str)
+                                .sql(" || '%'"),
+                        ),
+                    )
+                }
+
+                trace!(query = %diesel::debug_query(&query), "Listing accounts by popularity.");
+
+                Ok(query.load::<String>(conn)?)
+            })
+            .await?)
     }
 }
 
