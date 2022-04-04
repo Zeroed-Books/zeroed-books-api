@@ -15,7 +15,7 @@ argon2 = { version = "0.3.4", features = ["std"] }
 async-trait = "0.1.52"
 base64 = "0.13.0"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = { version = "3.1.6", features = ["derive", "env"]}
+clap = { version = "3.1.8", features = ["derive", "env"]}
 diesel = { version = "1.4.8", features = ["chrono", "postgres", "uuidv07"] }
 diesel_migrations = { version = "1.4.0", features = ["postgres"] }
 password-hash = "0.3"
