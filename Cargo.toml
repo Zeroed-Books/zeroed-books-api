@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.56"
 argon2 = { version = "0.3.4", features = ["std"] }
-async-trait = "0.1.52"
+async-trait = "0.1.56"
 base64 = "0.13.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = { version = "3.1.6", features = ["derive", "env"]}
