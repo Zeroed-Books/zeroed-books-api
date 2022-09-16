@@ -11,7 +11,7 @@ Using `docker compose`, you can stand up a local version of the application
 with:
 
 ```console
-docker compose -f ./docker-compose.base.yml -f ./docker-compose.standalone.yml up
+docker compose -f ./docker-compose.yml -f ./docker-compose.standalone.yml up
 ```
 
 ## Configuration

@@ -9,5 +9,8 @@ services:
             # Make rocket available outside the container.
             ROCKET_ADDRESS: "0.0.0.0"
 
+        networks:
+            - zeroed-books-api
+
         ports:
             - 8000:8000

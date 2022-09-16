@@ -2,11 +2,30 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.177.0/containers/rust
 {
 	"name": "Rust",
-	"dockerComposeFile": [
-		"../docker-compose.base.yml",
-		"./docker-compose.vscode.yml"
+	"build": {
+		"dockerfile": "Dockerfile",
+		"args": {
+			// Use the VARIANT arg to pick a Debian OS version: buster, bullseye
+			// Use bullseye when on local on arm64/Apple Silicon.
+			"VARIANT": "buster"
+		}
+	},
+	"containerEnv": {
+		"DATABASE_URL": "postgres://postgres:password@postgres/postgres",
+		"REDIS_URL": "redis://redis",
+		// A stable secret key so cookie sessions stay valid across restarts.
+		// Generated with:
+		//   $ openssl rand -base64 32
+		"SECRET_KEY": "jAxXeR+lG38ZA5ONOVci4ICc2VsuwbnHF4piuMYu8n8="
+	},
+	"runArgs": [
+		"--cap-add=SYS_PTRACE",
+		"--network=zeroed-books-api",
+		"--security-opt",
+		"seccomp=unconfined",
+		"--userns=keep-id"
 	],
-	"service": "vscode",
+	"postCreateCommand": "./.devcontainer/fix-cargo-perms.sh",
 	// Set *default* container specific settings.json values on container create.
 	"settings": {
 		"lldb.executable": "/usr/bin/lldb",
@@ -20,21 +39,13 @@
 	"extensions": [
 		"bungcip.better-toml",
 		"gruntfuggly.todo-tree",
-		"matklad.rust-analyzer",
+		"rust-lang.rust-analyzer",
 		"ms-azuretools.vscode-docker",
 		"mutantdino.resourcemonitor",
 		"patbenatar.advanced-new-file",
 		"vadimcn.vscode-lldb"
 	],
-	"features": {
-		"github-cli": "latest",
-	},
-	"workspaceFolder": "/workspace",
 	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
-	"remoteUser": "vscode",
-	// When we mount the volume to store GitHub credentials, it gets created
-	// with root permissions. This means we can't authenticate with the `gh` CLI
-	// because it doesn't have permission to store the credentials file. Setting
-	// ownership fixes that.
-	"onCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.config"
+	"containerUser": "vscode",
+	"remoteUser": "vscode"
 }
