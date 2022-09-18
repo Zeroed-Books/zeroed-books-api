@@ -20,7 +20,7 @@
 	"extensions": [
 		"bungcip.better-toml",
 		"gruntfuggly.todo-tree",
-		"matklad.rust-analyzer",
+		"rust-lang.rust-analyzer",
 		"ms-azuretools.vscode-docker",
 		"mutantdino.resourcemonitor",
 		"patbenatar.advanced-new-file",
@@ -36,5 +36,5 @@
 	// with root permissions. This means we can't authenticate with the `gh` CLI
 	// because it doesn't have permission to store the credentials file. Setting
 	// ownership fixes that.
-	"onCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.config"
+	"onCreateCommand": "./.devcontainer/fix-dev-perms.sh"
 }
