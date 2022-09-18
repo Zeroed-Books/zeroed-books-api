@@ -1,29 +1,26 @@
 use anyhow::Result;
-use diesel::{PgConnection, Queryable};
+use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Debug, Queryable)]
+#[derive(Debug)]
 pub struct User {
     pub id: Uuid,
-    #[column_name = "password"]
     pub password_hash: String,
 }
 
 impl User {
-    pub fn by_email(conn: &PgConnection, email: &str) -> Result<Option<Self>> {
-        use crate::schema::{email, user};
-        use diesel::prelude::*;
-
-        user::table
-            .select((user::id, user::password))
-            .inner_join(email::table)
-            .filter(
-                email::provided_address
-                    .eq(email)
-                    .and(email::verified_at.is_not_null()),
-            )
-            .first::<Self>(conn)
-            .optional()
-            .map_err(anyhow::Error::from)
+    pub async fn by_email(pool: &PgPool, email: &str) -> Result<Option<Self>> {
+        Ok(sqlx::query_as!(
+            Self,
+            r#"
+            SELECT u.id, u.password AS password_hash
+            FROM "email" e
+            LEFT JOIN "user" u ON e.user_id = u.id
+            WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL
+            "#,
+            email
+        )
+        .fetch_optional(pool)
+        .await?)
     }
 }

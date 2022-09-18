@@ -16,13 +16,11 @@ async-trait = "0.1.52"
 base64 = "0.13.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = { version = "3.1.6", features = ["derive", "env"]}
-diesel = { version = "1.4.8", features = ["chrono", "postgres", "uuidv07"] }
-diesel_migrations = { version = "1.4.0", features = ["postgres"] }
 password-hash = "0.3"
 rand = "0.8.5"
 rand_core = { version = "0.6", features = ["std"] }
 redis = "0.21.5"
-rocket = { version = "0.5.0-rc.1", features = ["json", "secrets", "uuid"] }
+rocket = { version = "0.5.0-rc.2", features = ["json", "secrets", "uuid"] }
 semval = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -35,12 +33,7 @@ sqlx = { version = "0.6.1", features = [
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-uuid = { version = "0.8.2", features = ["serde", "v4"]}
-
-[dependencies.rocket_sync_db_pools]
-version = "0.1.0-rc.1"
-default-features = false
-features = ["diesel_postgres_pool"]
+uuid = { version = "1.1.2", features = ["serde", "v4"]}
 
 [dependencies.sendgrid]
 version = "0.17.4"

@@ -7,6 +7,7 @@ use rocket::{
     Route, State,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -14,7 +15,6 @@ use crate::{
     http_err::{ApiError, InternalServerError},
     passwords,
     rate_limit::{RateLimitResult, RateLimiter},
-    PostgresConn,
 };
 
 use super::{domain::session::Session, models::User};
@@ -44,7 +44,7 @@ pub enum CreateSessionResponse {
 
 #[post("/cookie-sessions", data = "<credentials>")]
 async fn create_cookie_session(
-    db: PostgresConn,
+    db: &State<PgPool>,
     client_ip: IpAddr,
     cookies: &CookieJar<'_>,
     rate_limiter: &State<Box<dyn RateLimiter>>,
@@ -65,7 +65,7 @@ async fn create_cookie_session(
     };
 
     let user_email = credentials.email.clone();
-    let user_query = db.run(move |conn| User::by_email(conn, &user_email)).await;
+    let user_query = User::by_email(db, &user_email).await;
     let user_model = match user_query {
         Ok(Some(user)) => user,
         Ok(None) => {

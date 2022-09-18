@@ -1,34 +1,13 @@
 use std::convert::{TryFrom, TryInto};
 
 use chrono::{DateTime, NaiveDate, Utc};
-use diesel::{
-    dsl::AsExprOf, expression::AsExpression, sql_types, Insertable, PgConnection, Queryable,
-};
+use sqlx::{postgres::PgRow, PgPool, Row};
 use tracing::trace;
 use uuid::Uuid;
 
-use crate::schema::{currency, transaction, transaction_entry};
-
 use super::domain;
 
-sql_function!(
-    /// Get an account by owner ID and name, or create it if it doesn't exist.
-    ///
-    /// This can be helpful when working with accounts by name rather than ID.
-    ///
-    /// # Arguments
-    /// * `owner_id` - The ID of the user who owns the account.
-    /// * `account_name` - The name of the account.
-    ///
-    /// # Returns
-    ///
-    /// The ID of the account. If the user did not have an account with the
-    /// given name, a new one was created.
-    fn get_or_create_account(owner_id: sql_types::Uuid, account_name: sql_types::Text) -> sql_types::Uuid
-);
-
-#[derive(Clone, Debug, Insertable, Queryable)]
-#[table_name = "currency"]
+#[derive(Clone, Debug)]
 pub struct Currency {
     pub code: String,
     pub symbol: String,
@@ -36,25 +15,36 @@ pub struct Currency {
 }
 
 impl Currency {
-    pub fn find_by_codes(conn: &PgConnection, codes: Vec<String>) -> anyhow::Result<Vec<Self>> {
-        use crate::schema::currency::dsl::*;
-        use diesel::{dsl::any, prelude::*};
-
+    pub async fn find_by_codes(pool: &PgPool, codes: Vec<String>) -> anyhow::Result<Vec<Self>> {
         trace!(?codes, "Finding currencies matching codes.");
 
-        Ok(currency.filter(code.eq(any(codes))).get_results(conn)?)
+        Ok(sqlx::query_as!(
+            Self,
+            r#"
+            SELECT code, symbol, minor_units
+            FROM currency
+            WHERE code = ANY($1)
+            "#,
+            &codes
+        )
+        .fetch_all(pool)
+        .await?)
     }
 
-    pub fn get_by_code(conn: &PgConnection, currency_code: &str) -> anyhow::Result<Option<Self>> {
-        use crate::schema::currency::dsl::*;
-        use diesel::prelude::*;
-
+    pub async fn get_by_code(pool: &PgPool, currency_code: &str) -> anyhow::Result<Option<Self>> {
         trace!(currency_code, "Querying for currency by code.");
 
-        Ok(currency
-            .filter(code.eq(currency_code))
-            .first(conn)
-            .optional()?)
+        Ok(sqlx::query_as!(
+            Self,
+            r#"
+            SELECT code, symbol, minor_units
+            FROM currency
+            WHERE code = $1
+            "#,
+            currency_code
+        )
+        .fetch_optional(pool)
+        .await?)
     }
 }
 
@@ -84,13 +74,11 @@ impl TryFrom<&Currency> for domain::currency::Currency {
     }
 }
 
-#[derive(AsChangeset, Insertable)]
-#[table_name = "transaction"]
 pub struct NewTransaction {
     pub user_id: Uuid,
-    date: NaiveDate,
-    payee: String,
-    notes: String,
+    pub date: NaiveDate,
+    pub payee: String,
+    pub notes: String,
 }
 
 impl From<&domain::transactions::NewTransaction> for NewTransaction {
@@ -104,18 +92,16 @@ impl From<&domain::transactions::NewTransaction> for NewTransaction {
     }
 }
 
-#[derive(Debug, Insertable)]
-#[table_name = "transaction_entry"]
+#[derive(Debug)]
 pub struct NewTransactionEntry {
-    transaction_id: Uuid,
-    order: i32,
-    #[column_name = "account_id"]
-    account: AccountByName,
-    currency: String,
-    amount: i32,
+    pub transaction_id: Uuid,
+    pub order: i32,
+    pub account: AccountByName,
+    pub currency: String,
+    pub amount: i32,
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Clone, Debug)]
 pub struct Account {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -125,30 +111,8 @@ pub struct Account {
 
 #[derive(Debug)]
 pub struct AccountByName {
-    user_id: Uuid,
-    name: String,
-}
-
-impl AsExpression<diesel::sql_types::Uuid> for AccountByName {
-    type Expression = get_or_create_account::HelperType<
-        AsExprOf<Uuid, sql_types::Uuid>,
-        AsExprOf<String, sql_types::Text>,
-    >;
-
-    fn as_expression(self) -> Self::Expression {
-        get_or_create_account(self.user_id, self.name)
-    }
-}
-
-impl<'a> AsExpression<diesel::sql_types::Uuid> for &'a AccountByName {
-    type Expression = get_or_create_account::HelperType<
-        AsExprOf<Uuid, sql_types::Uuid>,
-        AsExprOf<String, sql_types::Text>,
-    >;
-
-    fn as_expression(self) -> Self::Expression {
-        get_or_create_account(self.user_id, self.name.clone())
-    }
+    pub user_id: Uuid,
+    pub name: String,
 }
 
 impl NewTransactionEntry {
@@ -176,8 +140,7 @@ impl NewTransactionEntry {
     }
 }
 
-#[derive(Debug, Identifiable, Queryable)]
-#[table_name = "transaction"]
+#[derive(Debug, sqlx::FromRow)]
 pub struct Transaction {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -209,42 +172,61 @@ impl Transaction {
     }
 }
 
-#[derive(Associations, Debug, Identifiable, Queryable)]
-#[belongs_to(Account)]
-#[belongs_to(Currency, foreign_key = "currency")]
-#[belongs_to(Transaction)]
-#[table_name = "transaction_entry"]
+#[derive(Clone, Debug)]
 pub struct TransactionEntry {
-    id: Uuid,
-    transaction_id: Uuid,
-    _order: i32,
-    account_id: Uuid,
-    currency: String,
-    amount: i32,
+    pub id: Uuid,
+    pub transaction_id: Uuid,
+    pub order: i32,
+    pub account_id: Uuid,
+    pub currency: String,
+    pub amount: i32,
 }
 
 /// A full transaction entry contains an entry as well as the associated account
 /// and currency.
-///
-/// To query for it, use the appropriate joins:
-///
-/// ```no_run
-/// # use zeroed_books_api::schema;
-/// # use diesel::prelude::*;
-///
-/// let _join = schema::transaction_entry::table
-///     .inner_join(schema::account::table)
-///     .inner_join(schema::currency::table);
-/// ```
-pub type FullTransactionEntry = (TransactionEntry, Account, Currency);
+#[derive(Clone)]
+pub struct FullTransactionEntry {
+    pub entry: TransactionEntry,
+    pub account: Account,
+    pub currency: Currency,
+}
+
+impl sqlx::FromRow<'_, PgRow> for FullTransactionEntry {
+    fn from_row(row: &'_ PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            entry: TransactionEntry {
+                id: row.try_get(0)?,
+                transaction_id: row.try_get(1)?,
+                order: row.try_get(2)?,
+                account_id: row.try_get(3)?,
+                currency: row.try_get(4)?,
+                amount: row.try_get(5)?,
+            },
+            account: Account {
+                id: row.try_get(6)?,
+                user_id: row.try_get(7)?,
+                name: row.try_get(8)?,
+                created_at: row.try_get(9)?,
+            },
+            currency: Currency {
+                code: row.try_get(10)?,
+                symbol: row.try_get(11)?,
+                minor_units: row.try_get(12)?,
+            },
+        })
+    }
+}
 
 impl TryFrom<&FullTransactionEntry> for domain::transactions::TransactionEntry {
     type Error = anyhow::Error;
 
     fn try_from(entry: &FullTransactionEntry) -> anyhow::Result<Self> {
         Ok(Self::new(
-            entry.1.name.clone(),
-            domain::currency::CurrencyAmount::from_minor((&entry.2).try_into()?, entry.0.amount),
+            entry.account.name.clone(),
+            domain::currency::CurrencyAmount::from_minor(
+                (&entry.currency).try_into()?,
+                entry.entry.amount,
+            ),
         ))
     }
 }

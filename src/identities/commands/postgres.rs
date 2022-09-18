@@ -1,21 +1,17 @@
 use anyhow::Result;
+use sqlx::PgPool;
 use tera::{Context, Tera};
 use tracing::{debug, info};
-use uuid::Uuid;
 
 use crate::{
     email::clients::{EmailClient, Message},
-    identities::{
-        domain,
-        models::password_resets::{NewPasswordReset, PasswordReset as PasswordResetModel},
-    },
+    identities::{domain, models::password_resets::PasswordReset as PasswordResetModel},
     passwords::{self, Password},
-    PostgresConn,
 };
 
 use super::{PasswordResetCommands, UserCommands};
 
-pub struct PostgresCommands<'a>(pub &'a PostgresConn);
+pub struct PostgresCommands<'a>(pub &'a PgPool);
 
 #[async_trait]
 impl<'a> PasswordResetCommands for PostgresCommands<'a> {
@@ -26,43 +22,36 @@ impl<'a> PasswordResetCommands for PostgresCommands<'a> {
         tera: &Tera,
     ) -> Result<()> {
         let target_email = password_reset.email().address().to_owned();
-        let saved_reset = self
-            .0
-            .run::<_, Result<_>>(move |conn| {
-                use crate::schema;
-                use diesel::prelude::*;
+        let owner_result = sqlx::query!(
+            r#"
+            SELECT e.user_id
+            FROM "email" e
+            WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL
+            "#,
+            password_reset.email().address()
+        )
+        .fetch_optional(self.0)
+        .await?;
 
-                let email_owner = schema::email::table
-                    .filter(
-                        schema::email::provided_address
-                            .eq(password_reset.email().address())
-                            .and(schema::email::verified_at.is_not_null()),
-                    )
-                    .select(schema::email::user_id);
-                let owner_result = schema::user::table
-                    .filter(schema::user::id.eq_any(email_owner))
-                    .select(schema::user::id)
-                    .get_result::<Uuid>(conn)
-                    .optional()?;
+        let saved_reset = match owner_result {
+            None => None,
+            Some(owner) => {
+                let saved_reset = sqlx::query_as!(
+                    PasswordResetModel,
+                    r#"
+                    INSERT INTO "password_resets" (token, user_id)
+                    VALUES ($1, $2)
+                    RETURNING token, user_id, created_at
+                    "#,
+                    password_reset.token(),
+                    owner.user_id,
+                )
+                .fetch_one(self.0)
+                .await?;
 
-                match owner_result {
-                    None => Ok(None),
-                    Some(owner) => {
-                        let model = NewPasswordReset {
-                            user_id: owner,
-                            token: password_reset.token().to_owned(),
-                        };
-
-                        let saved_reset: PasswordResetModel =
-                            diesel::insert_into(schema::password_resets::table)
-                                .values(model)
-                                .get_result(conn)?;
-
-                        Ok(Some(saved_reset))
-                    }
-                }
-            })
-            .await?;
+                Some(saved_reset)
+            }
+        };
 
         match saved_reset {
             Some(reset) => {
@@ -109,30 +98,29 @@ impl<'a> UserCommands for PostgresCommands<'a> {
         let user_id = reset_token.user_id();
         let hash = passwords::Hash::new(&password)?;
 
-        self.0
-            .run(move |conn| {
-                use diesel::prelude::*;
+        sqlx::query!(
+            r#"
+            UPDATE "user"
+            SET password = $2
+            WHERE id = $1
+            "#,
+            user_id,
+            hash.value()
+        )
+        .execute(self.0)
+        .await?;
 
-                {
-                    use crate::schema::user::dsl::*;
+        debug!(%user_id, "Changed user's password using reset token.");
 
-                    diesel::update(user)
-                        .set(password.eq(hash.value()))
-                        .filter(id.eq(user_id))
-                        .execute(conn)?;
-                }
-
-                debug!(%user_id, "Changed user's password using reset token.");
-
-                {
-                    use crate::schema::password_resets::dsl::*;
-
-                    diesel::delete(password_resets)
-                        .filter(token.eq(reset_token.token()))
-                        .execute(conn)
-                }
-            })
-            .await?;
+        sqlx::query!(
+            r#"
+                    DELETE FROM password_resets
+                    WHERE token = $1
+                    "#,
+            reset_token.token()
+        )
+        .execute(self.0)
+        .await?;
 
         debug!(%user_id, "Deleted password reset token.");
         info!(%user_id, "Reset user's password.");

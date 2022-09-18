@@ -1,16 +1,15 @@
-use diesel::Connection;
+use sqlx::{migrate::Migrator, postgres::PgPoolOptions};
 
-embed_migrations!();
+static MIGRATOR: Migrator = sqlx::migrate!("./migrations-sqlx");
 
 pub struct MigrationOpts {
     pub database_url: String,
 }
 
-pub fn run_migrations(opts: MigrationOpts) -> anyhow::Result<()> {
-    let connection = diesel::PgConnection::establish(&opts.database_url)?;
+pub async fn run_migrations(opts: MigrationOpts) -> anyhow::Result<()> {
+    let pool = PgPoolOptions::new().connect(&opts.database_url).await?;
 
-    Ok(embedded_migrations::run_with_output(
-        &connection,
-        &mut std::io::stdout(),
-    )?)
+    MIGRATOR.run(&pool).await?;
+
+    Ok(())
 }

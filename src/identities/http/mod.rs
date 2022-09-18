@@ -2,6 +2,7 @@ use std::net::IpAddr;
 
 use rocket::{serde::json::Json, Route, State};
 use semval::ValidatedFrom;
+use sqlx::PgPool;
 use tera::Tera;
 use tracing::error;
 
@@ -12,7 +13,7 @@ use crate::{
     identities::queries::{postgres::PostgresQueries, PasswordResetQueries},
     passwords::Password,
     rate_limit::{RateLimitResult, RateLimiter},
-    verify_email, PostgresConn,
+    verify_email,
 };
 
 use super::{
@@ -55,7 +56,7 @@ impl From<reps::PasswordResetError> for ResetPasswordResponse {
 #[post("/password-resets", data = "<reset_data>")]
 async fn create_password_reset<'r>(
     client_ip: IpAddr,
-    db: PostgresConn,
+    db: &State<PgPool>,
     rate_limiter: &State<Box<dyn RateLimiter>>,
     reset_data: Json<reps::PasswordReset<'r>>,
 ) -> ApiResponse<ResetPasswordResponse> {
@@ -138,7 +139,7 @@ impl From<reps::PasswordResetRequestError> for CreatePasswordResetResponse<'_> {
 #[post("/password-reset-requests", data = "<reset_request>")]
 async fn create_password_reset_request<'r>(
     client_ip: IpAddr,
-    db: PostgresConn,
+    db: &State<PgPool>,
     mailer: &State<Box<dyn EmailClient>>,
     rate_limiter: &State<Box<dyn RateLimiter>>,
     tera: &State<Tera>,

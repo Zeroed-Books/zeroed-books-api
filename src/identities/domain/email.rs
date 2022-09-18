@@ -21,11 +21,6 @@ impl Email {
         &self.0
     }
 
-    #[deprecated(note = "Use address instead.")]
-    pub fn normalized_address(&self) -> &str {
-        &self.0
-    }
-
     fn has_domain(&self) -> bool {
         if let Some(index) = self.0.find('@') {
             index < self.0.len() - 1
