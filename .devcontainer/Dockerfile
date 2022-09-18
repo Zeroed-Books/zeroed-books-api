@@ -5,8 +5,4 @@ FROM mcr.microsoft.com/vscode/devcontainers/rust:1
 USER vscode
 RUN rustup toolchain install stable --component clippy,rustfmt \
     && rustup default stable \
-    && cargo install diesel_cli --no-default-features --features postgres \
-    && cargo install sqlx-cli --no-default-features --features native-tls,postgres \
-    && echo 'eval "$(diesel completions bash)"' >> $HOME/.bashrc \
-    && sudo mkdir -p /usr/share/zsh/vendor-functions \
-    && diesel completions zsh | sudo tee /usr/share/zsh/vendor-functions/_diesel
+    && cargo install sqlx-cli --no-default-features --features native-tls,postgres

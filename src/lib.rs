@@ -150,8 +150,9 @@ pub async fn create_user(
                     }
                 }
             }
-            _ => {
-                // TODO: Logging.
+            error => {
+                error!(?error, "Failed to persist new user.");
+
                 return Err(InternalServerError {
                     message: "Internal server error.".to_owned(),
                 }
@@ -217,9 +218,10 @@ async fn persist_new_user(
 
     sqlx::query!(
         r#"
-        INSERT INTO "user" (password)
-        VALUES ($1)
+        INSERT INTO "user" (id, password)
+        VALUES ($1, $2)
         "#,
+        user.id,
         user.password_hash
     )
     .execute(&mut tx)

@@ -109,7 +109,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
         query_builder.push(
             r#"
             GROUP BY a.id
-            ORDER COUNT(e.*) DESC
+            ORDER BY COUNT(e.*) DESC
             LIMIT 10
             "#,
         );
@@ -188,7 +188,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             FROM transaction_entry e
                 LEFT JOIN account a ON e.account_id = a.id
                 LEFT JOIN currency c ON e.currency = c.code
-            ORDER "order"
+            ORDER BY "order"
             "#,
         )
         .fetch_all(self.0)
@@ -227,7 +227,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             .push_bind(query.user_id);
 
         if query.account.is_some() {
-            query_builder.push(" AND t.id = ANY(account_transaction_ids)");
+            query_builder.push(" AND t.id = ANY(SELECT * FROM account_transaction_ids)");
         }
 
         if let Some(cursor) = query.after {
@@ -268,8 +268,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
                 LEFT JOIN account a ON e.account_id = a.id
                 LEFT JOIN currency c ON e.currency = c.code
                 LEFT JOIN transaction t ON e.transaction_id = t.id
-            GROUP BY t.id
-            ORDER BY e."order"
+            ORDER BY t.id, e."order"
             "#,
         )
         .fetch_all(self.0)

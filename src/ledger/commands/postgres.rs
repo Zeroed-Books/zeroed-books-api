@@ -70,7 +70,7 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
                 .push("get_or_create_account(")
                 .push_bind_unseparated(transaction_model.user_id)
                 .push_bind(entry.account.name)
-                .push(")")
+                .push_unseparated(")")
                 .push_bind(entry.currency)
                 .push_bind(entry.amount);
         });
