@@ -99,8 +99,9 @@ pub async fn run_with_sys_args() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Migrate(opts) => Ok(migrate::run_migrations(opts.into())?),
-        Commands::Serve(opts) => Ok(server::rocket(opts.into())?
+        Commands::Migrate(opts) => Ok(migrate::run_migrations(opts.into()).await?),
+        Commands::Serve(opts) => Ok(server::rocket(opts.into())
+            .await?
             .ignite()
             .await?
             .launch()

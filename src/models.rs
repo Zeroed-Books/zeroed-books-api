@@ -1,14 +1,11 @@
 use std::convert::TryFrom;
 
-use crate::{identities::domain::users::NewUser, schema::user};
-use diesel::Insertable;
+use crate::identities::domain::users::NewUser;
 use uuid::Uuid;
 
-#[derive(Clone, Insertable)]
-#[table_name = "user"]
+#[derive(Clone)]
 pub struct NewUserModel {
     pub id: Uuid,
-    #[column_name = "password"]
     pub password_hash: String,
 }
 

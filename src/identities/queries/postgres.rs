@@ -1,18 +1,16 @@
 use anyhow::Result;
+use sqlx::PgPool;
 
-use crate::{
-    identities::{
-        domain::password_resets::PasswordResetTokenData, models::password_resets::PasswordReset,
-    },
-    PostgresConn,
+use crate::identities::{
+    domain::password_resets::PasswordResetTokenData, models::password_resets::PasswordReset,
 };
 
 use super::{PasswordResetError, PasswordResetQueries};
 
-pub struct PostgresQueries<'a>(pub &'a PostgresConn);
+pub struct PostgresQueries<'a>(pub &'a PgPool);
 
-impl From<diesel::result::Error> for PasswordResetError {
-    fn from(error: diesel::result::Error) -> Self {
+impl From<sqlx::Error> for PasswordResetError {
+    fn from(error: sqlx::Error) -> Self {
         Self::Unknown(error.into())
     }
 }
@@ -23,20 +21,18 @@ impl<'a> PasswordResetQueries for PostgresQueries<'a> {
         &self,
         provided_token: String,
     ) -> Result<PasswordResetTokenData, PasswordResetError> {
-        let reset = self
-            .0
-            .run::<_, Result<_, PasswordResetError>>(move |conn| {
-                use crate::schema::password_resets::dsl::*;
-                use diesel::prelude::*;
+        let result = sqlx::query_as!(
+            PasswordReset,
+            r#"
+            SELECT * FROM password_resets
+            WHERE token = $1
+            "#,
+            provided_token
+        )
+        .fetch_optional(self.0)
+        .await?;
 
-                Ok(password_resets
-                    .filter(token.eq(provided_token))
-                    .get_result::<PasswordReset>(conn)
-                    .optional()?)
-            })
-            .await?;
-
-        match reset {
+        match result {
             Some(reset) => Ok(reset.into()),
             None => Err(PasswordResetError::NotFound),
         }

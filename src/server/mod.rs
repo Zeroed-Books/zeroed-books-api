@@ -1,4 +1,7 @@
+use std::time::Duration;
+
 use rocket::{Build, Rocket};
+use sqlx::postgres::PgPoolOptions;
 use tera::Tera;
 
 use crate::{
@@ -6,7 +9,7 @@ use crate::{
     create_user,
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
     rate_limit::{RateLimiter, RedisRateLimiter},
-    verify_email, PostgresConn,
+    verify_email,
 };
 
 pub struct Options {
@@ -24,10 +27,14 @@ pub struct Options {
     pub sendgrid_key: Option<String>,
 }
 
-pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
-    let figment = rocket::Config::figment()
-        .merge(("databases.postgres", build_database_config(&opts)))
-        .merge(("secret_key", &opts.secret_key));
+pub async fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
+    let figment = rocket::Config::figment().merge(("secret_key", &opts.secret_key));
+
+    let db_pool = PgPoolOptions::new()
+        .max_connections(opts.database_pool_size)
+        .acquire_timeout(Duration::from_secs(opts.database_timeout_seconds.into()))
+        .connect(&opts.database_url)
+        .await?;
 
     let email_client: Box<dyn EmailClient> = if let Some(api_key) = opts.sendgrid_key {
         Box::new(SendgridMailer::new(
@@ -46,8 +53,8 @@ pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
     let rate_limiter: Box<dyn RateLimiter> = Box::new(RedisRateLimiter::new(&opts.redis_url)?);
 
     Ok(rocket::custom(figment)
-        .attach(PostgresConn::fairing())
         .attach(CorsHeaders)
+        .manage(db_pool)
         .manage(email_client)
         .manage(rate_limiter)
         .manage(tera)
@@ -55,12 +62,4 @@ pub fn rocket(opts: Options) -> anyhow::Result<Rocket<Build>> {
         .mount("/authentication", crate::authentication::http::routes())
         .mount("/identities", crate::identities::http::routes())
         .mount("/ledger", crate::ledger::http::routes()))
-}
-
-fn build_database_config(opts: &Options) -> rocket_sync_db_pools::Config {
-    rocket_sync_db_pools::Config {
-        pool_size: opts.database_pool_size,
-        timeout: opts.database_timeout_seconds,
-        url: opts.database_url.to_owned(),
-    }
 }

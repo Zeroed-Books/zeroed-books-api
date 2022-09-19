@@ -1,15 +1,9 @@
-use diesel::{
-    insert_into, result::DatabaseErrorKind, result::Error as DieselError, Insertable, PgConnection,
-};
+use sqlx::{Executor, PgPool, Postgres};
 use uuid::Uuid;
 
-use crate::{
-    identities::domain::email::{Email, EmailVerification},
-    schema::{email, email_verification},
-};
+use crate::identities::domain::email::{Email, EmailVerification};
 
-#[derive(Clone, Debug, Insertable)]
-#[table_name = "email"]
+#[derive(Clone, Debug)]
 pub struct NewEmail {
     id: Uuid,
     user_id: Uuid,
@@ -38,17 +32,26 @@ impl NewEmail {
         self.id
     }
 
-    pub fn provided_address(&self) -> &str {
-        &self.provided_address
-    }
+    pub async fn save<'c, E>(&self, executor: E) -> Result<(), EmailPersistanceError>
+    where
+        E: Executor<'c, Database = Postgres>,
+    {
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO email (id, user_id, provided_address, normalized_address)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            self.id,
+            self.user_id,
+            self.provided_address,
+            self.normalized_address
+        )
+        .execute(executor)
+        .await;
 
-    pub fn save(&self, conn: &PgConnection) -> Result<(), EmailPersistanceError> {
-        use crate::schema::email::dsl::*;
-        use diesel::prelude::*;
-
-        match insert_into(email).values(self).execute(conn) {
+        match result {
             Ok(_) => Ok(()),
-            Err(DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
+            Err(sqlx::Error::Database(db_err)) if db_err.code().unwrap_or_default() == "23505" => {
                 Err(EmailPersistanceError::DuplicateEmail(self.clone()))
             }
             Err(err) => Err(err.into()),
@@ -58,18 +61,17 @@ impl NewEmail {
 
 #[derive(Debug)]
 pub enum EmailPersistanceError {
-    DatabaseError(diesel::result::Error),
+    DatabaseError(sqlx::Error),
     DuplicateEmail(NewEmail),
 }
 
-impl From<diesel::result::Error> for EmailPersistanceError {
-    fn from(err: diesel::result::Error) -> Self {
+impl From<sqlx::Error> for EmailPersistanceError {
+    fn from(err: sqlx::Error) -> Self {
         EmailPersistanceError::DatabaseError(err)
     }
 }
 
-#[derive(Debug, Insertable)]
-#[table_name = "email_verification"]
+#[derive(Debug)]
 pub struct NewEmailVerification {
     token: String,
     email_id: Uuid,
@@ -83,13 +85,18 @@ impl NewEmailVerification {
         }
     }
 
-    pub fn save(&self, conn: &PgConnection) -> Result<(), DieselError> {
-        use crate::schema::email_verification::dsl::*;
-        use diesel::prelude::*;
+    pub async fn save(&self, pool: &PgPool) -> anyhow::Result<()> {
+        sqlx::query!(
+            r#"
+                INSERT INTO email_verification (token, email_id)
+                VALUES ($1, $2)
+                "#,
+            self.token,
+            self.email_id
+        )
+        .execute(pool)
+        .await?;
 
-        insert_into(email_verification)
-            .values(self)
-            .execute(conn)
-            .map(|_| ())
+        Ok(())
     }
 }

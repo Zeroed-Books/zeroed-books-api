@@ -1,87 +1,99 @@
-use crate::{
-    ledger::{domain, models},
-    schema, PostgresConn,
+use crate::ledger::{
+    domain,
+    models::{self},
 };
 
 use anyhow::Context;
-use tracing::{debug, error, info};
+use sqlx::{PgPool, Postgres, QueryBuilder};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 use super::{TransactionCommands, UpdateTransactionError};
 
-pub struct PostgresCommands<'a>(pub &'a PostgresConn);
+pub struct PostgresCommands<'a>(pub &'a PgPool);
 
 #[async_trait]
 impl<'a> TransactionCommands for PostgresCommands<'a> {
     async fn delete_transaction(&self, owner_id: Uuid, transaction_id: Uuid) -> anyhow::Result<()> {
-        use diesel::prelude::*;
-        use schema::transaction::dsl::*;
-
-        self.0
-            .run(move |conn| {
-                diesel::delete(transaction.filter(user_id.eq(owner_id).and(id.eq(transaction_id))))
-                    .execute(conn)
-            })
-            .await
-            .map(|count| {
-                info!(user_id = %owner_id, %transaction_id, rows = count, "Deleted transaction.");
-            })
-            .map_err(anyhow::Error::from)
+        Ok(sqlx::query!(
+            r#"
+            DELETE FROM "transaction"
+            WHERE user_id = $1 AND id = $2
+            "#,
+            owner_id,
+            transaction_id,
+        )
+        .execute(self.0)
+        .await
+        .map(|result| {
+            info!(user_id = %owner_id, %transaction_id, rows = result.rows_affected(), "Deleted transaction.");
+        })?)
     }
 
     async fn persist_transaction(
         &self,
         transaction: domain::transactions::NewTransaction,
     ) -> anyhow::Result<domain::transactions::Transaction> {
-        use diesel::prelude::*;
-
         let transaction_model: models::NewTransaction = (&transaction).into();
 
-        let saved_transaction = self
-            .0
-            .run(move |conn| {
-                conn.build_transaction()
-                    .run::<models::Transaction, diesel::result::Error, _>(|| {
-                        let saved_transaction: models::Transaction =
-                            diesel::insert_into(schema::transaction::table)
-                                .values(transaction_model)
-                                .get_result(conn)?;
+        let mut tx = self.0.begin().await?;
 
-                        let entry_models = models::NewTransactionEntry::from_domain_entries(
-                            saved_transaction.id,
-                            transaction.user_id(),
-                            transaction.entries(),
-                        )
-                        .map_err(|error| {
-                            error!(?error, "Failed to map transaction entries to model.");
+        let persisted_transaction = sqlx::query_as!(
+            models::Transaction,
+            r#"
+            INSERT INTO transaction (user_id, "date", payee, notes)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, user_id, date, payee, notes, created_at, updated_at
+            "#,
+            transaction_model.user_id,
+            transaction_model.date,
+            transaction_model.payee,
+            transaction_model.notes,
+        )
+        .fetch_one(&mut tx)
+        .await?;
 
-                            diesel::result::Error::RollbackTransaction
-                        })?;
+        let entry_models = models::NewTransactionEntry::from_domain_entries(
+            persisted_transaction.id,
+            transaction.user_id(),
+            transaction.entries(),
+        )
+        .context("Failed to map transaction entries to model.")?;
 
-                        diesel::insert_into(schema::transaction_entry::table)
-                            .values(entry_models)
-                            .execute(conn)?;
+        let mut entry_query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            r#"INSERT INTO transaction_entry (transaction_id, "order", account_id, currency, amount)"#,
+        );
 
-                        Ok(saved_transaction)
-                    })
-            })
-            .await?;
+        entry_query_builder.push_values(entry_models, |mut b, entry| {
+            b.push_bind(entry.transaction_id)
+                .push_bind(entry.order)
+                .push("get_or_create_account(")
+                .push_bind_unseparated(transaction_model.user_id)
+                .push_bind(entry.account.name)
+                .push_unseparated(")")
+                .push_bind(entry.currency)
+                .push_bind(entry.amount);
+        });
 
-        info!(id = %saved_transaction.id, "Persisted new transaction.");
+        entry_query_builder.build().execute(&mut tx).await?;
+        tx.commit().await?;
 
-        let transaction_id = saved_transaction.id;
-        let entries: Vec<models::FullTransactionEntry> = self
-            .0
-            .run(move |conn| {
-                schema::transaction_entry::table
-                    .inner_join(schema::account::table)
-                    .inner_join(schema::currency::table)
-                    .filter(schema::transaction_entry::transaction_id.eq(transaction_id))
-                    .load(conn)
-            })
-            .await?;
+        info!(id = %persisted_transaction.id, "Persisted new transaction.");
 
-        Ok(saved_transaction.try_into_domain(&entries)?)
+        let entries = sqlx::query_as::<_, models::FullTransactionEntry>(
+            r#"
+            SELECT e.*, a.*, c.*
+            FROM transaction_entry e
+            LEFT JOIN account a ON e.account_id = a.id
+            LEFT JOIN currency c ON e.currency = c.code
+            WHERE e.transaction_id = $1
+            "#,
+        )
+        .bind(persisted_transaction.id)
+        .fetch_all(self.0)
+        .await?;
+
+        Ok(persisted_transaction.try_into_domain(&entries)?)
     }
 
     async fn update_transaction(
@@ -97,55 +109,74 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
         )
         .context("Failed to convert domain entries to model.")?;
 
-        let (saved_transaction, saved_entries) = self
-            .0
-            .run::<_, Result<_, UpdateTransactionError>>(move |conn| {
-                use diesel::prelude::*;
+        let mut tx = self.0.begin().await?;
 
-                let updated_transaction = conn
-                    .build_transaction()
-                    .run::<_, UpdateTransactionError, _>(|| {
-                        let updated_transaction: models::Transaction =
-                            diesel::update(schema::transaction::table.filter(
-                                schema::transaction::id.eq(transaction_id).and(
-                                    schema::transaction::user_id.eq(transaction_changeset.user_id),
-                                ),
-                            ))
-                            .set(transaction_changeset)
-                            .get_result(conn)
-                            .map_err(|err| {
-                                debug!(%transaction_id, "Rolling back transaction update because the transaction does not exist.");
+        let updated_transaction = sqlx::query_as!(
+            models::Transaction,
+            r#"
+            UPDATE transaction
+            SET
+                date = $3,
+                payee = $4,
+                notes = $5
+            WHERE id = $1 AND user_id = $2
+            RETURNING *
+            "#,
+            transaction_id,
+            transaction_changeset.user_id,
+            transaction_changeset.date,
+            transaction_changeset.payee,
+            transaction_changeset.notes
+        )
+        .fetch_one(&mut tx)
+        .await?;
 
-                                err
-                            })?;
+        let old_entry_delete = sqlx::query!(
+            r#"
+            DELETE FROM transaction_entry
+            WHERE transaction_id = $1
+            "#,
+            transaction_id
+        )
+        .execute(&mut tx)
+        .await?;
+        debug!(%transaction_id, rows = old_entry_delete.rows_affected(), "Cleared out old transaction entries.");
 
-                        diesel::delete(
-                            schema::transaction_entry::table.filter(
-                                schema::transaction_entry::transaction_id.eq(transaction_id),
-                            ),
-                        )
-                        .execute(conn)?;
+        let mut entry_query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            r#"INSERT INTO transaction_entry (transaction_id, "order", account_id, currency, amount)"#,
+        );
 
-                        diesel::insert_into(schema::transaction_entry::table)
-                            .values(&transaction_entries)
-                            .execute(conn)?;
+        entry_query_builder.push_values(transaction_entries, |mut b, entry| {
+            b.push_bind(entry.transaction_id)
+                .push_bind(entry.order)
+                .push("get_or_create_account(")
+                .push_bind_unseparated(transaction_changeset.user_id)
+                .push_bind(entry.account.name)
+                .push(")")
+                .push_bind(entry.currency)
+                .push_bind(entry.amount);
+        });
 
-                        Ok(updated_transaction)
-                    })?;
+        entry_query_builder.build().execute(&mut tx).await?;
+        tx.commit().await?;
 
-                let entries = models::TransactionEntry::belonging_to(&updated_transaction)
-                    .inner_join(schema::account::table)
-                    .inner_join(schema::currency::table)
-                    .get_results::<models::FullTransactionEntry>(conn)?;
-
-                Ok((updated_transaction, entries))
-            })
-            .await?;
+        let updated_entries = sqlx::query_as::<_, models::FullTransactionEntry>(
+            r#"
+            SELECT e.*, a.*, c.*
+            FROM transaction_entry e
+            LEFT JOIN account a ON e.account_id = a.id
+            LEFT JOIN currency c ON e.currency = c.code
+            WHERE e.transaction_id = $1
+            "#,
+        )
+        .bind(transaction_id)
+        .fetch_all(self.0)
+        .await?;
 
         info!(%transaction_id, "Updated transaction.");
 
-        Ok(saved_transaction
-            .try_into_domain(&saved_entries)
+        Ok(updated_transaction
+            .try_into_domain(&updated_entries)
             .context("Failed to convert transaction model into domain object.")?)
     }
 }
@@ -156,10 +187,10 @@ impl From<anyhow::Error> for UpdateTransactionError {
     }
 }
 
-impl From<diesel::result::Error> for UpdateTransactionError {
-    fn from(error: diesel::result::Error) -> Self {
+impl From<sqlx::Error> for UpdateTransactionError {
+    fn from(error: sqlx::Error) -> Self {
         match error {
-            diesel::result::Error::NotFound => Self::TransactionNotFound,
+            sqlx::Error::RowNotFound => Self::TransactionNotFound,
             other => Self::DatabaseError(other.into()),
         }
     }

@@ -14,6 +14,25 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: password
+
+        # Set health checks to wait until Postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/postgres
+
     steps:
       - uses: actions/checkout@v3
 
@@ -23,6 +42,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
 
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
+
+      - name: Run database migrations
+        run: cargo sqlx migrate run --source migrations-sqlx
+
+      - name: Verify query data
+        run: cargo sqlx prepare --check
+
       - name: Verify formatting
         run: cargo fmt --all -- --check
 
@@ -31,6 +59,10 @@ jobs:
 
       - name: Build
         run: cargo build --verbose
+        env:
+          SQLX_OFFLINE: "true"
 
       - name: Run tests
         run: cargo test --verbose
+        env:
+          SQLX_OFFLINE: "true"

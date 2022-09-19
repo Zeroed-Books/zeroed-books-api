@@ -5,16 +5,11 @@
 #![deny(elided_lifetimes_in_paths)]
 
 #[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-#[macro_use]
 extern crate rocket;
 
 use std::{convert::TryInto, net::IpAddr};
 
 use chrono::Duration;
-use diesel::{insert_into, RunQueryDsl};
 use email::clients::{EmailClient, Message};
 use http_err::ApiError;
 use identities::{
@@ -31,8 +26,8 @@ use rocket::{
     serde::{json::Json, Deserialize, Serialize},
     State,
 };
-use rocket_sync_db_pools::database;
 use semval::ValidatedFrom;
+use sqlx::PgPool;
 use tera::{Context, Tera};
 use tracing::{error, trace};
 
@@ -48,11 +43,7 @@ pub mod ledger;
 mod models;
 pub mod passwords;
 mod rate_limit;
-pub mod schema;
 mod server;
-
-#[database("postgres")]
-pub struct PostgresConn(diesel::PgConnection);
 
 #[derive(Serialize)]
 pub struct RegistrationError {
@@ -84,7 +75,7 @@ impl From<identities::http::reps::NewUserValidationError> for CreateUserResponse
 
 #[post("/users", data = "<new_user_data>")]
 pub async fn create_user(
-    db: PostgresConn,
+    db: &State<PgPool>,
     client_ip: IpAddr,
     email_client: &State<Box<dyn EmailClient>>,
     rate_limiter: &State<Box<dyn RateLimiter>>,
@@ -123,9 +114,7 @@ pub async fn create_user(
     let email_model = NewEmail::for_user(new_user.id(), new_user.email());
     let new_email_id = email_model.id();
 
-    let persistance_result = db
-        .run(|c| persist_new_user(c, user_model, email_model))
-        .await;
+    let persistance_result = persist_new_user(db, user_model, email_model).await;
 
     if let Err(persistence_err) = persistance_result {
         match persistence_err {
@@ -161,8 +150,9 @@ pub async fn create_user(
                     }
                 }
             }
-            _ => {
-                // TODO: Logging.
+            error => {
+                error!(?error, "Failed to persist new user.");
+
                 return Err(InternalServerError {
                     message: "Internal server error.".to_owned(),
                 }
@@ -174,7 +164,7 @@ pub async fn create_user(
     let verification = EmailVerification::new();
     let verification_model = NewEmailVerification::new(new_email_id, &verification);
 
-    let verification_save_result = db.run(move |conn| verification_model.save(conn)).await;
+    let verification_save_result = verification_model.save(db).await;
     match verification_save_result {
         Ok(()) => (),
         Err(err) => {
@@ -219,18 +209,29 @@ pub async fn create_user(
     )))
 }
 
-fn persist_new_user(
-    conn: &diesel::PgConnection,
+async fn persist_new_user(
+    conn: &PgPool,
     user: NewUserModel,
     email: NewEmail,
 ) -> Result<(), EmailPersistanceError> {
-    use crate::schema::user;
+    let mut tx = conn.begin().await?;
 
-    conn.build_transaction().run(|| {
-        insert_into(user::table).values(&user).execute(conn)?;
+    sqlx::query!(
+        r#"
+        INSERT INTO "user" (id, password)
+        VALUES ($1, $2)
+        "#,
+        user.id,
+        user.password_hash
+    )
+    .execute(&mut tx)
+    .await?;
 
-        email.save(conn)
-    })
+    email.save(&mut tx).await?;
+
+    tx.commit().await?;
+
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -258,12 +259,10 @@ pub enum EmailVerificationResponse {
 
 #[post("/email-verifications", data = "<verification_request>")]
 pub async fn verify_email(
-    db: PostgresConn,
+    db: &State<PgPool>,
     verification_request: Json<EmailVerificationRequest>,
 ) -> Result<EmailVerificationResponse, ApiError> {
-    let verification_result = db
-        .run(move |c| mark_email_as_verified(c, &verification_request.token))
-        .await;
+    let verification_result = mark_email_as_verified(db, &verification_request.token).await;
 
     match verification_result {
         Ok(EmailVerificationResult::EmailVerified(address)) => {
@@ -293,42 +292,48 @@ enum EmailVerificationResult {
     NotFound,
 }
 
-fn mark_email_as_verified(
-    conn: &diesel::PgConnection,
+async fn mark_email_as_verified(
+    db: &PgPool,
     token: &str,
-) -> Result<EmailVerificationResult, diesel::result::Error> {
-    use crate::schema::{email, email_verification};
-    use diesel::prelude::*;
-
+) -> Result<EmailVerificationResult, sqlx::Error> {
     let now = chrono::Utc::now();
     let expiration = now - Duration::days(1);
 
     trace!(%now, %expiration, "Verifying email address.");
 
-    let verification = email_verification::table.filter(
-        email_verification::token
-            .eq(token)
-            .and(email_verification::created_at.gt(expiration)),
-    );
-
-    let verified_address: Result<String, diesel::result::Error> = diesel::update(email::table)
-        .set(email::verified_at.eq(diesel::dsl::now))
-        .filter(email::id.eq_any(verification.select(email_verification::email_id)))
-        .returning(email::provided_address)
-        .get_result(conn);
+    let verified_address = sqlx::query!(
+        r#"
+        WITH pending_verification_emails AS (
+            SELECT email_id
+            FROM email_verification
+            WHERE token = $1 AND created_at > $2
+        )
+        UPDATE email
+        SET verified_at = now()
+        WHERE id = ANY(SELECT * FROM pending_verification_emails)
+        RETURNING provided_address
+        "#,
+        token,
+        expiration
+    )
+    .fetch_optional(db)
+    .await?
+    .map(|record| record.provided_address);
 
     match verified_address {
-        Ok(address) => {
-            let token_delete = diesel::delete(email_verification::table)
-                .filter(email_verification::token.eq(token))
-                .execute(conn);
+        Some(address) => {
+            sqlx::query!(
+                r#"
+                DELETE FROM email_verification
+                WHERE token = $1
+                "#,
+                token
+            )
+            .execute(db)
+            .await?;
 
-            match token_delete {
-                Ok(_) => Ok(EmailVerificationResult::EmailVerified(address)),
-                Err(err) => Err(err),
-            }
+            Ok(EmailVerificationResult::EmailVerified(address))
         }
-        Err(diesel::NotFound) => Ok(EmailVerificationResult::NotFound),
-        Err(err) => Err(err),
+        None => Ok(EmailVerificationResult::NotFound),
     }
 }

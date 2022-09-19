@@ -4,7 +4,7 @@ pub struct Currency {
     minor_units: u8,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum CurrencyParseError {
     /// The provided amount could not be parsed as a number.
     InvalidNumber(String),
