@@ -1,4 +1,4 @@
-FROM rust:1.58 AS builder
+FROM rust:1 AS builder
 
 # Create appuser
 ENV USER=zeroed-books
