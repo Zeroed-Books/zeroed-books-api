@@ -1,4 +1,6 @@
 use clap::{Args, Parser, Subcommand};
+use tracing::debug;
+use tracing_subscriber::EnvFilter;
 
 use crate::server;
 
@@ -8,6 +10,12 @@ mod migrate;
 struct Cli {
     #[clap(subcommand)]
     command: Commands,
+
+    /// DSN to tell Sentry where to send events.
+    ///
+    /// If provided, errors will be sent to Sentry.
+    #[clap(long = "sentry-dsn", env = "SENTRY_DSN")]
+    sentry_dsn: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -96,7 +104,34 @@ impl From<ServeOpts> for server::Options {
 }
 
 pub async fn run_with_sys_args() -> anyhow::Result<()> {
+    use tracing_subscriber::prelude::*;
+
     let cli = Cli::parse();
+
+    let sentry_config = cli.sentry_dsn.map(|dsn| {
+        debug!("Enabled sentry.");
+
+        sentry::init((
+            dsn,
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                ..Default::default()
+            },
+        ))
+    });
+
+    let sentry_tracing_layer = if sentry_config.is_some() {
+        Some(sentry_tracing::layer())
+    } else {
+        None
+    };
+
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
+
+    tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(sentry_tracing_layer)
+        .init();
 
     match cli.command {
         Commands::Migrate(opts) => Ok(migrate::run_migrations(opts.into()).await?),
