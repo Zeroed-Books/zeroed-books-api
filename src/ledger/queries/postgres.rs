@@ -250,7 +250,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             .fetch_all(self.0)
             .await?
             .iter()
-            .map(|row| models::Transaction::from_row(row))
+            .map(models::Transaction::from_row)
             .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
         // To figure out if there is a next page, we query one more element than
@@ -280,7 +280,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             entries_by_transaction
                 .entry(entry.entry.transaction_id)
                 .and_modify(|entries| entries.push(entry.clone()))
-                .or_insert(vec![entry]);
+                .or_insert_with(|| vec![entry]);
         }
 
         let transactions = transactions_data

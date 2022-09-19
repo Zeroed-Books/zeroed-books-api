@@ -38,7 +38,7 @@ async fn delete_transaction(
     db: &State<PgPool>,
     transaction_id: Uuid,
 ) -> Result<Status, ApiError> {
-    let commands = PostgresCommands(&db);
+    let commands = PostgresCommands(db);
 
     match commands
         .delete_transaction(session.user_id(), transaction_id)
@@ -59,7 +59,7 @@ async fn get_account_balance(
     session: Session,
     account: &str,
 ) -> ApiResponse<Json<Vec<reps::CurrencyAmount>>> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     match queries
         .get_account_balance(session.user_id(), account.to_owned())
@@ -82,7 +82,7 @@ async fn get_accounts(
     session: Session,
     query: Option<String>,
 ) -> ApiResponse<Json<Vec<String>>> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     match queries
         .list_accounts_by_popularity(session.user_id(), query)
@@ -121,7 +121,7 @@ async fn get_transaction(
     db: &State<PgPool>,
     transaction_id: Uuid,
 ) -> Result<GetTransactionResponse, ApiError> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     match queries
         .get_transaction(session.user_id(), transaction_id)
@@ -146,7 +146,7 @@ async fn get_transactions(
     Json<reps::ResourceCollection<reps::Transaction, reps::EncodedTransactionCursor>>,
     ApiError,
 > {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     let query = queries::TransactionQuery {
         user_id: session.user_id(),
@@ -196,7 +196,7 @@ async fn create_transaction(
     new_transaction: Json<reps::NewTransaction>,
     db: &State<PgPool>,
 ) -> Result<CreateTransactionResponse, ApiError> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     let used_currency_codes = Vec::from_iter(new_transaction.used_currency_codes());
     let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
@@ -213,7 +213,7 @@ async fn create_transaction(
         Err(error) => return Ok(error.into()),
     };
 
-    let ledger_commands = PostgresCommands(&db);
+    let ledger_commands = PostgresCommands(db);
 
     let saved_transaction = match ledger_commands.persist_transaction(transaction).await {
         Ok(t) => t,
@@ -256,7 +256,7 @@ async fn update_transaction(
     updated_transaction: Json<reps::NewTransaction>,
     db: &State<PgPool>,
 ) -> Result<UpdateTransactionResponse, ApiError> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     let used_currency_codes = Vec::from_iter(updated_transaction.used_currency_codes());
     let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
@@ -274,7 +274,7 @@ async fn update_transaction(
         Err(error) => return Ok(error.into()),
     };
 
-    let ledger_commands = PostgresCommands(&db);
+    let ledger_commands = PostgresCommands(db);
 
     let saved_transaction = match ledger_commands
         .update_transaction(transaction_id, transaction)

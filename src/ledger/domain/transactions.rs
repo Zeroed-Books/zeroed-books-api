@@ -7,7 +7,7 @@ use super::currency::{Currency, CurrencyAmount};
 
 /// A new transaction entered by a user. This may only be constructed by calling
 /// [`Self::new()`] which prevents construction of unbalanced transactions.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NewTransaction {
     user_id: Uuid,
     date: NaiveDate,
@@ -16,7 +16,7 @@ pub struct NewTransaction {
     entries: Vec<TransactionEntry>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum NewTransactionError {
     /// The entries in the transaction are not balanced, ie they do not sum to
     /// zero. The value is a mapping of currencies to balances.
@@ -141,7 +141,7 @@ pub struct Transaction {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransactionEntry {
     account: String,
     amount: CurrencyAmount,

@@ -1,7 +1,7 @@
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use semval::prelude::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Email(String);
 
 impl Email {
@@ -30,7 +30,7 @@ impl Email {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum EmailInvalidity {
     /// The address does not have a domain portion.
     MissingDomain,

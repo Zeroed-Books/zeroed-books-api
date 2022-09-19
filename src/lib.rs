@@ -262,7 +262,7 @@ pub async fn verify_email(
     db: &State<PgPool>,
     verification_request: Json<EmailVerificationRequest>,
 ) -> Result<EmailVerificationResponse, ApiError> {
-    let verification_result = mark_email_as_verified(&db, &verification_request.token).await;
+    let verification_result = mark_email_as_verified(db, &verification_request.token).await;
 
     match verification_result {
         Ok(EmailVerificationResult::EmailVerified(address)) => {

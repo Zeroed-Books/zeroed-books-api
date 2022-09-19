@@ -78,7 +78,7 @@ async fn create_password_reset<'r>(
         }
     };
 
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     let password_reset_data = match queries
         .get_password_reset(reset_data.token.to_owned())
@@ -102,7 +102,7 @@ async fn create_password_reset<'r>(
         }
     };
 
-    let commands = PostgresCommands(&db);
+    let commands = PostgresCommands(db);
     match commands
         .reset_user_password(validated_token, password)
         .await
@@ -163,7 +163,7 @@ async fn create_password_reset_request<'r>(
         }
     };
 
-    let commands = PostgresCommands(&db);
+    let commands = PostgresCommands(db);
     match commands
         .create_reset_token(password_reset, mailer.as_ref(), tera)
         .await
