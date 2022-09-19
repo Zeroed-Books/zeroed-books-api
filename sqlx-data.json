@@ -1,0 +1,569 @@
+{
+  "db": "PostgreSQL",
+  "08343b3d38585e5a806d52cd7c069c1172d4c81c95960d7dbfca52e8c5994ee7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "password_hash",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT u.id, u.password AS password_hash\n            FROM \"email\" e\n            LEFT JOIN \"user\" u ON e.user_id = u.id\n            WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL\n            "
+  },
+  "0b82c36dbe20b5aeb4e4f795f5e0da1b27ce8b5d4ad9cb067ccadd005ca85ae0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "date",
+          "ordinal": 2,
+          "type_info": "Date"
+        },
+        {
+          "name": "payee",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "notes",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n            SELECT * FROM transaction\n            WHERE user_id = $1 AND id = $2\n            "
+  },
+  "13d6667b60f168fca9d2a2a3c65c360e0d6ef994047d85c21463ab3052d35bcf": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n                INSERT INTO email_verification (token, email_id)\n                VALUES ($1, $2)\n                "
+  },
+  "29fdb3ba01954392562792479d84d3be8489658d02039b793992aa6aa9a4f52e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "code",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "symbol",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "minor_units",
+          "ordinal": 2,
+          "type_info": "Int2"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT * FROM currency\n            WHERE code = ANY($1)\n            "
+  },
+  "485efcac2cba0cd40294f7c452e320adad0fe85355f1976d46bd7c141d4b335c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "code",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "symbol",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "minor_units",
+          "ordinal": 2,
+          "type_info": "Int2"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT * FROM currency\n            WHERE code = ANY($1)\n            ORDER BY code\n            "
+  },
+  "4bd68191eeced058fa8075f9428d595a9ac4746a578a913f03487233a82eecf6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "user_id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT e.user_id\n            FROM \"email\" e\n            WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL\n            "
+  },
+  "59987294c1d6df6810901d185473bfe857a7ebb717e52a89e35c231c22ecea06": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO email (id, user_id, provided_address, normalized_address)\n            VALUES ($1, $2, $3, $4)\n            "
+  },
+  "72ec6e3f62afb88bdc8780146fbeab67551c0c34c48e143dd3c8f0d177f4316e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "code",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "symbol",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "minor_units",
+          "ordinal": 2,
+          "type_info": "Int2"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT code, symbol, minor_units\n            FROM currency\n            WHERE code = $1\n            "
+  },
+  "847971f288b8523ae7311d081bc22b09477e7d6b044e72cead44260f5229484d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n                DELETE FROM email_verification\n                WHERE token = $1\n                "
+  },
+  "91ffbb3e8265046387cda5295aaf25a553e960eab8b8ff99328f604b5c275631": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO \"user\" (id, password)\n        VALUES ($1, $2)\n        "
+  },
+  "9df3cf96fdece6dbc1982c9b2ad50db5347493c14befa471e0a4a57c3c698c0f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n                    DELETE FROM password_resets\n                    WHERE token = $1\n                    "
+  },
+  "9f38a1165d8e95cb4de0b808cf19b991cd4fc0768faef32c91d838a3e0a79fd6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "currency",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "amount!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT e.\"currency\", COALESCE(SUM(e.\"amount\"), 0) AS \"amount!\"\n                FROM transaction_entry e\n                    JOIN account a ON a.id = e.account_id\n                    JOIN transaction t ON t.id = e.transaction_id\n            WHERE\n                t.user_id = $1\n                AND\n                    (a.name = $2 OR a.name LIKE $2 || ':%')\n            GROUP BY e.currency\n            ORDER BY e.currency\n            "
+  },
+  "a98c78d04d5b34ea2f9a5c0ec00dc81ccc774dce6006a53151771d01d6ca4800": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "date",
+          "ordinal": 2,
+          "type_info": "Date"
+        },
+        {
+          "name": "payee",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "notes",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Date",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            UPDATE transaction\n            SET\n                date = $3,\n                payee = $4,\n                notes = $5\n            WHERE id = $1 AND user_id = $2\n            RETURNING *\n            "
+  },
+  "afc3c55c42244016261b681d3ad83b50a1fdac7ff40cbd377b03c9cb2481f10e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "provided_address",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        WITH pending_verification_emails AS (\n            SELECT email_id\n            FROM email_verification\n            WHERE token = $1 AND created_at > $2\n        )\n        UPDATE email\n        SET verified_at = now()\n        WHERE id = ANY(SELECT * FROM pending_verification_emails)\n        RETURNING provided_address\n        "
+  },
+  "b2e3184b9de3bf24967b42f62004a9116837c4c0d5f4774f4947a1c876462f25": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            UPDATE \"user\"\n            SET password = $2\n            WHERE id = $1\n            "
+  },
+  "c407daf238ec2ea69e8831d10dea7777ae99ca2ff03c7bdd3b0b513d4848eb5f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "token",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n                    INSERT INTO \"password_resets\" (token, user_id)\n                    VALUES ($1, $2)\n                    RETURNING token, user_id, created_at\n                    "
+  },
+  "c60ba679f3e177453e3cd6bc1f3669b80fa401b6ac899be094a5c8c7c83d1a8f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "code",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "symbol",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "minor_units",
+          "ordinal": 2,
+          "type_info": "Int2"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT code, symbol, minor_units\n            FROM currency\n            WHERE code = ANY($1)\n            "
+  },
+  "c9627c44bea7a7f0694deb809da15a10d5570edbd735189669c42369416c7e9d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM transaction_entry\n            WHERE transaction_id = $1\n            "
+  },
+  "e0ec74545d6912b117c4c20ad7edf61dbf9c37ce7ff8f253009c44d1e414a12f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "date",
+          "ordinal": 2,
+          "type_info": "Date"
+        },
+        {
+          "name": "payee",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "notes",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Date",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO transaction (user_id, \"date\", payee, notes)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, user_id, date, payee, notes, created_at, updated_at\n            "
+  },
+  "fe26d9547a9dcac20fe6d9508af002a7e83ad1dcad6645d63889cbae23492bd4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "token",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT * FROM password_resets\n            WHERE token = $1\n            "
+  },
+  "ffcb51b5c81fc78a8e46c4c6394725f88448bd20ac8871f8cc0f3d69e6ace222": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM \"transaction\"\n            WHERE user_id = $1 AND id = $2\n            "
+  }
+}

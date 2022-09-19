@@ -29,6 +29,7 @@ COPY . .
 #
 # https://github.com/rust-lang/cargo/issues/7982
 RUN touch src/main.rs
+ENV SQLX_OFFLINE=true
 RUN cargo build --locked --release
 
 
