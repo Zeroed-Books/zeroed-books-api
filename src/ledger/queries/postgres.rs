@@ -188,9 +188,11 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             FROM transaction_entry e
                 LEFT JOIN account a ON e.account_id = a.id
                 LEFT JOIN currency c ON e.currency = c.code
+            WHERE e.transaction_id = $1
             ORDER BY "order"
             "#,
         )
+        .bind(transaction_id)
         .fetch_all(self.0)
         .await?;
 
