@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use clap::{Args, Parser, Subcommand};
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
@@ -114,7 +116,7 @@ pub async fn run_with_sys_args() -> anyhow::Result<()> {
         sentry::init((
             dsn,
             sentry::ClientOptions {
-                release: sentry::release_name!(),
+                release: Some(Cow::from(env!("VERGEN_GIT_SHA"))),
                 ..Default::default()
             },
         ))

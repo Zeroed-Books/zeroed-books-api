@@ -2,6 +2,7 @@
 name = "zeroed-books-api"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [[bin]]
 name = "zeroed-books-api"
@@ -61,3 +62,7 @@ features = ["async"]
 [dependencies.tera]
 version = "1.12.1"
 default-features = false
+
+[build-dependencies]
+anyhow = { version = "1.0.56" }
+vergen = { version = "7.4.2", default-featuers = false, features = ["git"] }
