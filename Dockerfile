@@ -19,7 +19,7 @@ WORKDIR /usr/src/zeroed-books-api
 # the dependencies don't change, any future builds will only have to recompile
 # our code (and not the dependencies).
 RUN cargo init
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock build.rs ./
 RUN cargo build --locked --release
 
 COPY . .
