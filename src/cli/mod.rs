@@ -135,12 +135,14 @@ pub async fn run_with_sys_args() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Migrate(opts) => Ok(migrate::run_migrations(opts.into()).await?),
-        Commands::Serve(opts) => Ok(server::rocket(opts.into())
-            .await?
-            .ignite()
-            .await?
-            .launch()
-            .await
-            .map(|_| ())?),
+        Commands::Serve(opts) => {
+            let migrate_opts = MigrateOpts {
+                database_url: opts.database_url.clone(),
+            };
+
+            migrate::run_migrations(migrate_opts.into()).await?;
+
+            server::serve(opts.into()).await
+        }
     }
 }

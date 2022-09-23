@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use sendgrid::v3::{Content, Email, Personalization, Sender};
 use tracing::info;
 

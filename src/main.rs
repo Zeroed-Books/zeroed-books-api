@@ -2,7 +2,7 @@ use tracing::debug;
 
 use zeroed_books_api::cli;
 
-#[rocket::main]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     debug!("Starting CLI.");
 

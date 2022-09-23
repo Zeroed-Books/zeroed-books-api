@@ -13,15 +13,15 @@ use crate::{
 };
 
 #[derive(Deserialize)]
-pub struct NewUserRequest<'r> {
-    email: &'r str,
-    password: &'r str,
+pub struct NewUserRequest {
+    email: String,
+    password: String,
 }
 
-impl<'r> From<NewUserRequest<'r>> for domain::users::NewUserData<'r> {
-    fn from(rep: NewUserRequest<'r>) -> Self {
+impl From<NewUserRequest> for domain::users::NewUserData {
+    fn from(rep: NewUserRequest) -> Self {
         Self {
-            email: rep.email,
+            email: rep.email.to_owned(),
             password: rep.password,
         }
     }
@@ -72,8 +72,8 @@ impl From<ValidationContext<NewUserInvalidity>> for NewUserValidationError {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct PasswordResetRequest<'r> {
-    pub email: &'r str,
+pub struct PasswordResetRequest {
+    pub email: String,
 }
 
 #[derive(Default, Serialize)]
@@ -101,9 +101,9 @@ impl From<ValidationContext<EmailInvalidity>> for PasswordResetRequestError {
 }
 
 #[derive(Deserialize)]
-pub struct PasswordReset<'r> {
-    pub token: &'r str,
-    pub new_password: &'r str,
+pub struct PasswordReset {
+    pub token: String,
+    pub new_password: String,
 }
 
 #[derive(Default, Serialize)]

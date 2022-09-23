@@ -1,6 +1,7 @@
-use rocket::response::Responder;
-use rocket::serde::json::Json;
-use rocket::serde::Serialize;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
+use serde::Serialize;
 use tracing::error;
 
 use crate::rate_limit::RateLimitResult;
@@ -18,17 +19,30 @@ impl Default for InternalServerError {
     }
 }
 
-impl From<InternalServerError> for ApiError {
-    fn from(error: InternalServerError) -> Self {
-        Self::InternalServerError(Json(error))
+impl IntoResponse for InternalServerError {
+    fn into_response(self) -> Response {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(self)).into_response()
     }
 }
 
-#[derive(Responder)]
 pub enum ApiError {
+    InternalServerError(InternalServerError),
     TooManyRequests(RateLimitResult),
-    #[response(status = 500)]
-    InternalServerError(Json<InternalServerError>),
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::InternalServerError(inner) => inner.into_response(),
+            Self::TooManyRequests(result) => result.into_response(),
+        }
+    }
+}
+
+impl From<InternalServerError> for ApiError {
+    fn from(error: InternalServerError) -> Self {
+        Self::InternalServerError(error)
+    }
 }
 
 impl From<RateLimitResult> for ApiError {
@@ -41,9 +55,7 @@ impl From<anyhow::Error> for ApiError {
     fn from(error: anyhow::Error) -> Self {
         error!(?error, "Received error.");
 
-        Self::InternalServerError(Json(InternalServerError {
-            message: "Internal server error.".to_string(),
-        }))
+        Self::InternalServerError(Default::default())
     }
 }
 
