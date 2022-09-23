@@ -2,13 +2,13 @@ mod redis;
 
 use std::error::Error;
 
-use chrono::Utc;
-use rocket::{
-    http::Status,
-    response::Responder,
-    serde::{json::Json, Serialize},
-    Response,
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
 };
+use chrono::Utc;
+use serde::Serialize;
 
 pub use self::redis::RedisRateLimiter;
 
@@ -62,16 +62,19 @@ impl From<RateLimitResult> for RateLimitResponse {
     }
 }
 
-impl<'r, 'o: 'r> Responder<'r, 'o> for RateLimitResult {
-    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'o> {
-        let response_status = match self {
-            Self::LimitedUntil(_time) => Status::TooManyRequests,
-            _ => Status::Ok,
-        };
-        let response_data: RateLimitResponse = self.into();
-
-        Response::build_from(Json(response_data).respond_to(request)?)
-            .status(response_status)
-            .ok()
+impl IntoResponse for RateLimitResult {
+    fn into_response(self) -> Response {
+        if let Self::LimitedUntil(_time) = self {
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(RateLimitResponse::from(self)),
+            )
+                .into_response()
+        } else {
+            // A `RateLimitResult` will typically only be converted to a
+            // response in a failure scenario, but if a non-limited result is
+            // converted, we just respond with a simple success status code.
+            StatusCode::OK.into_response()
+        }
     }
 }

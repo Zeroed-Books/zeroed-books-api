@@ -4,14 +4,18 @@
 #![allow(clippy::new_without_default)]
 #![deny(elided_lifetimes_in_paths)]
 
-#[macro_use]
-extern crate rocket;
+use std::{convert::TryInto, sync::Arc};
 
-use std::{convert::TryInto, net::IpAddr};
-
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
 use chrono::Duration;
+use client_ip::ClientIp;
 use email::clients::{EmailClient, Message};
-use http_err::ApiError;
+use http_err::{ApiError, ApiResponse};
 use identities::{
     domain::{
         email::EmailVerification,
@@ -21,12 +25,8 @@ use identities::{
 };
 use models::NewUserModel;
 use rate_limit::{RateLimitResult, RateLimiter};
-use rocket::{
-    response::Responder,
-    serde::{json::Json, Deserialize, Serialize},
-    State,
-};
 use semval::ValidatedFrom;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tera::{Context, Tera};
 use tracing::{error, trace};
@@ -35,7 +35,7 @@ use crate::http_err::InternalServerError;
 
 pub mod authentication;
 pub mod cli;
-pub mod cors;
+pub mod client_ip;
 mod email;
 mod http_err;
 mod identities;
@@ -53,34 +53,39 @@ pub struct RegistrationError {
     password: Option<Vec<String>>,
 }
 
-#[derive(Responder)]
 pub enum CreateUserResponse {
-    #[response(status = 201)]
-    UserCreated(Json<identities::http::reps::NewUserResponse>),
-    #[response(status = 400)]
-    BadRequest(Json<identities::http::reps::NewUserValidationError>),
+    UserCreated(identities::http::reps::NewUserResponse),
+    BadRequest(identities::http::reps::NewUserValidationError),
+}
+
+impl IntoResponse for CreateUserResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::UserCreated(user) => (StatusCode::CREATED, Json(user)).into_response(),
+            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
+        }
+    }
 }
 
 impl From<identities::http::reps::NewUserResponse> for CreateUserResponse {
     fn from(response: identities::http::reps::NewUserResponse) -> Self {
-        Self::UserCreated(Json(response))
+        Self::UserCreated(response)
     }
 }
 
 impl From<identities::http::reps::NewUserValidationError> for CreateUserResponse {
     fn from(response: identities::http::reps::NewUserValidationError) -> Self {
-        Self::BadRequest(Json(response))
+        Self::BadRequest(response)
     }
 }
 
-#[post("/users", data = "<new_user_data>")]
 pub async fn create_user(
-    db: &State<PgPool>,
-    client_ip: IpAddr,
-    email_client: &State<Box<dyn EmailClient>>,
-    rate_limiter: &State<Box<dyn RateLimiter>>,
-    templates: &State<Tera>,
-    new_user_data: Json<identities::http::reps::NewUserRequest<'_>>,
+    State(db): State<PgPool>,
+    ClientIp(client_ip): ClientIp,
+    State(email_client): State<Arc<dyn EmailClient>>,
+    State(rate_limiter): State<Arc<dyn RateLimiter>>,
+    State(templates): State<Tera>,
+    Json(new_user_data): Json<identities::http::reps::NewUserRequest>,
 ) -> Result<CreateUserResponse, ApiError> {
     let rate_limit_key = format!("/users_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
@@ -96,7 +101,7 @@ pub async fn create_user(
     // TODO: Validate both password and email, so both sets of errors can be
     //       presented in the same response.
 
-    let new_user = match NewUser::validated_from(NewUserData::from(new_user_data.0)) {
+    let new_user = match NewUser::validated_from(NewUserData::from(new_user_data)) {
         Ok(user) => user,
         Err((_, context)) => {
             return Ok(identities::http::reps::NewUserValidationError::from(context).into())
@@ -114,7 +119,7 @@ pub async fn create_user(
     let email_model = NewEmail::for_user(new_user.id(), new_user.email());
     let new_email_id = email_model.id();
 
-    let persistance_result = persist_new_user(db, user_model, email_model).await;
+    let persistance_result = persist_new_user(&db, user_model, email_model).await;
 
     if let Err(persistence_err) = persistance_result {
         match persistence_err {
@@ -131,11 +136,11 @@ pub async fn create_user(
 
                 match email_client.send(&message).await {
                     Ok(()) => {
-                        return Ok(CreateUserResponse::UserCreated(Json(
+                        return Ok(CreateUserResponse::UserCreated(
                             identities::http::reps::NewUserResponse {
                                 email: new_user.email().address().to_owned(),
                             },
-                        )))
+                        ))
                     }
                     Err(e) => {
                         error!(
@@ -164,7 +169,7 @@ pub async fn create_user(
     let verification = EmailVerification::new();
     let verification_model = NewEmailVerification::new(new_email_id, &verification);
 
-    let verification_save_result = verification_model.save(db).await;
+    let verification_save_result = verification_model.save(&db).await;
     match verification_save_result {
         Ok(()) => (),
         Err(err) => {
@@ -202,11 +207,11 @@ pub async fn create_user(
         }
     }
 
-    Ok(CreateUserResponse::UserCreated(Json(
+    Ok(CreateUserResponse::UserCreated(
         identities::http::reps::NewUserResponse {
             email: new_user.email().address().to_owned(),
         },
-    )))
+    ))
 }
 
 async fn persist_new_user(
@@ -249,40 +254,44 @@ pub struct VerificationError {
     message: String,
 }
 
-#[derive(Responder)]
 pub enum EmailVerificationResponse {
-    #[response(status = 201)]
-    Verified(Json<EmailVerified>),
-    #[response(status = 400)]
-    BadRequest(Json<VerificationError>),
+    Verified(EmailVerified),
+    BadRequest(VerificationError),
 }
 
-#[post("/email-verifications", data = "<verification_request>")]
+impl IntoResponse for EmailVerificationResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Verified(verification) => {
+                (StatusCode::CREATED, Json(verification)).into_response()
+            }
+            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
+        }
+    }
+}
+
 pub async fn verify_email(
-    db: &State<PgPool>,
-    verification_request: Json<EmailVerificationRequest>,
-) -> Result<EmailVerificationResponse, ApiError> {
-    let verification_result = mark_email_as_verified(db, &verification_request.token).await;
+    State(db): State<PgPool>,
+    Json(verification_request): Json<EmailVerificationRequest>,
+) -> ApiResponse<EmailVerificationResponse> {
+    let verification_result = mark_email_as_verified(&db, &verification_request.token).await;
 
     match verification_result {
         Ok(EmailVerificationResult::EmailVerified(address)) => {
-            Ok(EmailVerificationResponse::Verified(Json(EmailVerified {
+            Ok(EmailVerificationResponse::Verified(EmailVerified {
                 email: address,
-            })))
+            }))
         }
-        Ok(EmailVerificationResult::NotFound) => Ok(EmailVerificationResponse::BadRequest(Json(
-            VerificationError {
+        Ok(EmailVerificationResult::NotFound) => {
+            Ok(EmailVerificationResponse::BadRequest(VerificationError {
                 message: "The provided verification token is either invalid or has expired."
                     .to_string(),
-            },
-        ))),
+            }))
+        }
         Err(err) => {
             error!(error = ?err, "Failed to verify email.");
 
-            Err(InternalServerError {
-                message: "Internal server error.".to_string(),
-            }
-            .into())
+            Err(InternalServerError::default().into())
         }
     }
 }

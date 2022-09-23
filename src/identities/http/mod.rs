@@ -1,18 +1,26 @@
-use std::net::IpAddr;
+use std::sync::Arc;
 
-use rocket::{serde::json::Json, Route, State};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::post,
+    Json, Router,
+};
 use semval::ValidatedFrom;
 use sqlx::PgPool;
 use tera::Tera;
 use tracing::error;
 
 use crate::{
+    client_ip::ClientIp,
     create_user,
     email::clients::EmailClient,
     http_err::{ApiResponse, InternalServerError},
     identities::queries::{postgres::PostgresQueries, PasswordResetQueries},
     passwords::Password,
     rate_limit::{RateLimitResult, RateLimiter},
+    server::AppState,
     verify_email,
 };
 
@@ -24,21 +32,29 @@ use super::{
 
 pub mod reps;
 
-pub fn routes() -> Vec<Route> {
-    routes![
-        create_password_reset,
-        create_password_reset_request,
-        create_user,
-        verify_email
-    ]
+pub fn routes(app_state: AppState) -> Router<AppState> {
+    Router::with_state(app_state)
+        .route("/email-verifications", post(verify_email))
+        .route(
+            "/password-reset-requests",
+            post(create_password_reset_request),
+        )
+        .route("/password-resets", post(create_password_reset))
+        .route("/users", post(create_user))
 }
 
-#[derive(Responder)]
 pub enum ResetPasswordResponse {
-    #[response(status = 200)]
     Ok(()),
-    #[response(status = 400)]
-    BadRequest(Json<reps::PasswordResetError>),
+    BadRequest(reps::PasswordResetError),
+}
+
+impl IntoResponse for ResetPasswordResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Ok(_) => StatusCode::OK.into_response(),
+            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
+        }
+    }
 }
 
 impl From<()> for ResetPasswordResponse {
@@ -49,16 +65,15 @@ impl From<()> for ResetPasswordResponse {
 
 impl From<reps::PasswordResetError> for ResetPasswordResponse {
     fn from(response: reps::PasswordResetError) -> Self {
-        Self::BadRequest(Json(response))
+        Self::BadRequest(response)
     }
 }
 
-#[post("/password-resets", data = "<reset_data>")]
-async fn create_password_reset<'r>(
-    client_ip: IpAddr,
-    db: &State<PgPool>,
-    rate_limiter: &State<Box<dyn RateLimiter>>,
-    reset_data: Json<reps::PasswordReset<'r>>,
+async fn create_password_reset(
+    ClientIp(client_ip): ClientIp,
+    State(db): State<PgPool>,
+    State(rate_limiter): State<Arc<dyn RateLimiter>>,
+    Json(reset_data): Json<reps::PasswordReset>,
 ) -> ApiResponse<ResetPasswordResponse> {
     let rate_limit_key = format!("/identities/password-resets_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
@@ -71,14 +86,14 @@ async fn create_password_reset<'r>(
         }
     };
 
-    let password = match Password::validated_from(reset_data.new_password) {
+    let password = match Password::validated_from(reset_data.new_password.as_str()) {
         Ok(password) => password,
         Err((_, context)) => {
             return Ok(reps::PasswordResetError::from(context).into());
         }
     };
 
-    let queries = PostgresQueries(db);
+    let queries = PostgresQueries(&db);
 
     let password_reset_data = match queries
         .get_password_reset(reset_data.token.to_owned())
@@ -102,7 +117,7 @@ async fn create_password_reset<'r>(
         }
     };
 
-    let commands = PostgresCommands(db);
+    let commands = PostgresCommands(&db);
     match commands
         .reset_user_password(validated_token, password)
         .await
@@ -116,35 +131,40 @@ async fn create_password_reset<'r>(
     }
 }
 
-#[derive(Responder)]
-pub enum CreatePasswordResetResponse<'r> {
-    #[response(status = 200)]
-    Ok(Json<reps::PasswordResetRequest<'r>>),
-    #[response(status = 400)]
-    BadRequest(Json<reps::PasswordResetRequestError>),
+pub enum CreatePasswordResetResponse {
+    Ok(reps::PasswordResetRequest),
+    BadRequest(reps::PasswordResetRequestError),
 }
 
-impl<'r> From<reps::PasswordResetRequest<'r>> for CreatePasswordResetResponse<'r> {
-    fn from(response: reps::PasswordResetRequest<'r>) -> Self {
-        Self::Ok(Json(response))
+impl IntoResponse for CreatePasswordResetResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Ok(body) => (StatusCode::OK, Json(body)).into_response(),
+            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
+        }
     }
 }
 
-impl From<reps::PasswordResetRequestError> for CreatePasswordResetResponse<'_> {
+impl From<reps::PasswordResetRequest> for CreatePasswordResetResponse {
+    fn from(response: reps::PasswordResetRequest) -> Self {
+        Self::Ok(response)
+    }
+}
+
+impl From<reps::PasswordResetRequestError> for CreatePasswordResetResponse {
     fn from(response: reps::PasswordResetRequestError) -> Self {
-        Self::BadRequest(Json(response))
+        Self::BadRequest(response)
     }
 }
 
-#[post("/password-reset-requests", data = "<reset_request>")]
-async fn create_password_reset_request<'r>(
-    client_ip: IpAddr,
-    db: &State<PgPool>,
-    mailer: &State<Box<dyn EmailClient>>,
-    rate_limiter: &State<Box<dyn RateLimiter>>,
-    tera: &State<Tera>,
-    reset_request: Json<reps::PasswordResetRequest<'r>>,
-) -> ApiResponse<CreatePasswordResetResponse<'r>> {
+async fn create_password_reset_request(
+    ClientIp(client_ip): ClientIp,
+    State(db): State<PgPool>,
+    State(mailer): State<Arc<dyn EmailClient>>,
+    State(rate_limiter): State<Arc<dyn RateLimiter>>,
+    State(tera): State<Tera>,
+    Json(reset_request): Json<reps::PasswordResetRequest>,
+) -> ApiResponse<CreatePasswordResetResponse> {
     let rate_limit_key = format!("/identities/password-reset-requests_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
         Ok(RateLimitResult::NotLimited) => (),
@@ -156,19 +176,19 @@ async fn create_password_reset_request<'r>(
         }
     };
 
-    let password_reset = match NewPasswordReset::validated_from(reset_request.email) {
+    let password_reset = match NewPasswordReset::validated_from(reset_request.email.as_ref()) {
         Ok(reset) => reset,
         Err((_, context)) => {
             return Ok(reps::PasswordResetRequestError::from(context).into());
         }
     };
 
-    let commands = PostgresCommands(db);
+    let commands = PostgresCommands(&db);
     match commands
-        .create_reset_token(password_reset, mailer.as_ref(), tera)
+        .create_reset_token(password_reset, mailer.as_ref(), &tera)
         .await
     {
-        Ok(()) => Ok(reset_request.0.into()),
+        Ok(()) => Ok(reset_request.into()),
         Err(error) => {
             error!(?error, "Failed to save password reset token.");
 

@@ -44,18 +44,18 @@ impl Validate for NewUser {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct NewUserData<'a> {
-    pub email: &'a str,
-    pub password: &'a str,
+#[derive(Clone, Debug)]
+pub struct NewUserData {
+    pub email: String,
+    pub password: String,
 }
 
-impl<'a> ValidatedFrom<NewUserData<'a>> for NewUser {
-    fn validated_from(from: NewUserData<'a>) -> ValidatedResult<Self> {
+impl ValidatedFrom<NewUserData> for NewUser {
+    fn validated_from(from: NewUserData) -> ValidatedResult<Self> {
         let into = NewUser {
             id: Uuid::new_v4(),
             email: Email::unvalidated(from.email.to_owned()),
-            password: Password::unvalidated(from.password.to_owned()),
+            password: Password::unvalidated(from.password),
         };
 
         match into.validate() {
@@ -73,16 +73,16 @@ mod tests {
     #[test]
     pub fn validated_from_valid() -> Result<()> {
         let data = NewUserData {
-            email: "test@example.com",
-            password: "CorrectHorseBatteryStaple",
+            email: "test@example.com".to_owned(),
+            password: "CorrectHorseBatteryStaple".to_owned(),
         };
 
-        let new_user = NewUser::validated_from(data).expect("user should be valid");
+        let new_user = NewUser::validated_from(data.clone()).expect("user should be valid");
 
         assert_eq!(data.email, new_user.email().address());
         assert!(new_user
             .password_hash()?
-            .matches_raw_password(data.password)?);
+            .matches_raw_password(&data.password)?);
 
         Ok(())
     }

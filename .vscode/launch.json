@@ -24,7 +24,11 @@
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "info,zeroed_books_api=trace"
+                "RUST_LOG": "info,zeroed_books_api=trace",
+                // A stable secret key so cookie sessions stay valid across restarts.
+                // Generated with:
+                //   $ openssl rand -base64 50
+                "SECRET_KEY": "xvpV7KL41RIFdnU7KTO99jYduEhEHJnsoYn26cEwrYIXPGGuqNXenxfRZE1+xSSzcZo="
             }
         },
         {

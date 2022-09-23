@@ -1,13 +1,9 @@
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use chrono::{DateTime, NaiveDate, Utc};
-use rocket::form::{self, error::ErrorKind, FromFormField, ValueField};
 use serde::{Deserialize, Serialize, Serializer};
-use tracing::debug;
+
 use uuid::Uuid;
 
 use crate::ledger::domain::{
@@ -163,25 +159,11 @@ impl From<domain::transactions::TransactionCursor> for TransactionCursor {
     }
 }
 
-pub struct EncodedTransactionCursor(TransactionCursor);
+pub struct EncodedTransactionCursor(pub TransactionCursor);
 
 impl From<domain::transactions::TransactionCursor> for EncodedTransactionCursor {
     fn from(cursor: domain::transactions::TransactionCursor) -> Self {
         Self(cursor.into())
-    }
-}
-
-impl<'r> FromFormField<'r> for TransactionCursor {
-    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
-        debug!(value = %field.value, "Decoding transaction cursor.");
-
-        Ok(
-            serde_json::from_value::<EncodedTransactionCursor>(serde_json::Value::String(
-                field.value.to_owned(),
-            ))
-            .map(|encoded| encoded.0)
-            .map_err(|err| ErrorKind::Validation(Cow::from(err.to_string())))?,
-        )
     }
 }
 

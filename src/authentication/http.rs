@@ -1,26 +1,33 @@
-use std::net::IpAddr;
+use std::sync::Arc;
 
-use anyhow::Result;
-use rocket::{
-    http::{Cookie, CookieJar},
-    serde::json::Json,
-    Route, State,
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
 };
+use axum_extra::extract::{cookie::Cookie, PrivateCookieJar};
+use cookie::time::Duration;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{debug, error};
 use uuid::Uuid;
 
 use crate::{
-    http_err::{ApiError, InternalServerError},
+    client_ip::ClientIp,
+    http_err::{ApiResponse, InternalServerError},
     passwords,
     rate_limit::{RateLimitResult, RateLimiter},
+    server::AppState,
 };
 
 use super::{domain::session::Session, models::User};
 
-pub fn routes() -> Vec<Route> {
-    routes![create_cookie_session, get_user_info]
+pub fn routes(app_state: AppState) -> Router<AppState> {
+    Router::with_state(app_state)
+        .route("/cookie-sessions", post(create_cookie_session))
+        .route("/me", get(get_user_info))
 }
 
 #[derive(Deserialize)]
@@ -34,22 +41,27 @@ pub struct SessionCreationError {
     message: String,
 }
 
-#[derive(Responder)]
 pub enum CreateSessionResponse {
-    #[response(status = 201)]
-    Created(()),
-    #[response(status = 400)]
-    BadRequest(Json<SessionCreationError>),
+    Created(PrivateCookieJar),
+    BadRequest(SessionCreationError),
 }
 
-#[post("/cookie-sessions", data = "<credentials>")]
+impl IntoResponse for CreateSessionResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Created(cookie_jar) => (cookie_jar, StatusCode::CREATED).into_response(),
+            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
+        }
+    }
+}
+
 async fn create_cookie_session(
-    db: &State<PgPool>,
-    client_ip: IpAddr,
-    cookies: &CookieJar<'_>,
-    rate_limiter: &State<Box<dyn RateLimiter>>,
-    credentials: Json<EmailPasswordPair>,
-) -> Result<CreateSessionResponse, ApiError> {
+    State(db): State<PgPool>,
+    ClientIp(client_ip): ClientIp,
+    cookies: PrivateCookieJar,
+    State(rate_limiter): State<Arc<dyn RateLimiter>>,
+    Json(credentials): Json<EmailPasswordPair>,
+) -> ApiResponse<CreateSessionResponse> {
     let rate_limit_key = format!("/authentication/cookie-sessions_post_{}", client_ip);
     match rate_limiter.is_limited(&rate_limit_key, 10) {
         Ok(RateLimitResult::NotLimited) => (),
@@ -65,15 +77,13 @@ async fn create_cookie_session(
     };
 
     let user_email = credentials.email.clone();
-    let user_query = User::by_email(db, &user_email).await;
+    let user_query = User::by_email(&db, &user_email).await;
     let user_model = match user_query {
         Ok(Some(user)) => user,
         Ok(None) => {
-            return Ok(CreateSessionResponse::BadRequest(Json(
-                SessionCreationError {
-                    message: "Invalid email or password.".to_string(),
-                },
-            )))
+            return Ok(CreateSessionResponse::BadRequest(SessionCreationError {
+                message: "Invalid email or password.".to_string(),
+            }))
         }
         Err(error) => {
             error!(?error, "Error finding user by email.");
@@ -100,17 +110,18 @@ async fn create_cookie_session(
 
             let session = Session::new_for_user(user_model.id);
             let serialized_session = session.serialized()?;
-            let session_cookie = Cookie::new("session", serialized_session);
+            let session_cookie = Cookie::build("session", serialized_session)
+                .path("/")
+                .max_age(Duration::days(7))
+                .finish();
 
-            cookies.add_private(session_cookie);
+            let updated_cookies = cookies.add(session_cookie);
 
-            Ok(CreateSessionResponse::Created(()))
+            Ok(CreateSessionResponse::Created(updated_cookies))
         }
-        Ok(false) => Ok(CreateSessionResponse::BadRequest(Json(
-            SessionCreationError {
-                message: "Invalid email or password.".to_string(),
-            },
-        ))),
+        Ok(false) => Ok(CreateSessionResponse::BadRequest(SessionCreationError {
+            message: "Invalid email or password.".to_string(),
+        })),
         Err(error) => {
             error!(?error, "Failed to compare password and hash.");
 
@@ -124,7 +135,6 @@ pub struct UserInfo {
     pub user_id: Uuid,
 }
 
-#[get("/me")]
 async fn get_user_info(session: Session) -> Json<UserInfo> {
     Json(UserInfo {
         user_id: session.user_id(),

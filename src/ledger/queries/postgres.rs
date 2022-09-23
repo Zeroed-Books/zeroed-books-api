@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Row};
 use tracing::{debug, trace};
 use uuid::Uuid;

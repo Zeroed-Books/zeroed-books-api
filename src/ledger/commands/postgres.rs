@@ -4,6 +4,7 @@ use crate::ledger::{
 };
 
 use anyhow::Context;
+use async_trait::async_trait;
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use tracing::{debug, info};
 use uuid::Uuid;

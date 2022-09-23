@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use tera::Tera;
 
 use crate::{email::clients::EmailClient, passwords::Password};
