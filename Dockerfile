@@ -15,20 +15,7 @@ RUN adduser \
 
 WORKDIR /usr/src/zeroed-books-api
 
-# Create a dummy project and run a build with all our dependencies. As long as
-# the dependencies don't change, any future builds will only have to recompile
-# our code (and not the dependencies).
-RUN cargo init
-COPY Cargo.toml Cargo.lock build.rs ./
-RUN cargo build --locked --release
-
 COPY . .
-# We have to touch a file so that the modification timestamp is different from
-# our dummy program. If we don't, cargo doesn't rebuild the project and we end
-# up with the output of the dummy program.
-#
-# https://github.com/rust-lang/cargo/issues/7982
-RUN touch src/main.rs
 ENV SQLX_OFFLINE=true
 RUN cargo build --locked --release
 
