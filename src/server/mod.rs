@@ -12,6 +12,7 @@ use tower_http::cors::{self, CorsLayer};
 
 use crate::{
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
+    identities::services::UserService,
     rate_limit::{RateLimiter, RedisRateLimiter},
 };
 
@@ -37,6 +38,7 @@ pub struct AppState {
     key: Key,
     rate_limiter: Arc<dyn RateLimiter>,
     tera: Tera,
+    user_service: UserService,
 }
 
 pub async fn serve(opts: Options) -> anyhow::Result<()> {
@@ -62,6 +64,13 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let rate_limiter: Arc<dyn RateLimiter> = Arc::new(RedisRateLimiter::new(&opts.redis_url)?);
 
+    let user_service = UserService::new(
+        db_pool.clone(),
+        email_client.clone(),
+        rate_limiter.clone(),
+        tera.clone(),
+    );
+
     let cors = CorsLayer::new()
         .allow_credentials(true)
         .allow_headers([header::CONTENT_TYPE])
@@ -74,6 +83,7 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
         key: Key::from(opts.secret_key.as_bytes()),
         rate_limiter,
         tera,
+        user_service,
     };
 
     let app = Router::new()
@@ -122,5 +132,11 @@ impl FromRef<AppState> for Arc<dyn EmailClient> {
 impl FromRef<AppState> for Arc<dyn RateLimiter> {
     fn from_ref(state: &AppState) -> Self {
         state.rate_limiter.clone()
+    }
+}
+
+impl FromRef<AppState> for UserService {
+    fn from_ref(state: &AppState) -> Self {
+        state.user_service.clone()
     }
 }

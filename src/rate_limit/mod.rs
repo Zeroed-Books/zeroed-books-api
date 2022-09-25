@@ -1,7 +1,5 @@
 mod redis;
 
-use std::error::Error;
-
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -30,11 +28,7 @@ pub trait RateLimiter: Send + Sync {
     /// requestor's rate limit state is returned. An [Err] is returned if the
     /// rate limiter encounters an error while trying to determine if the
     /// request should be rate limited.
-    fn is_limited(
-        &self,
-        key: &str,
-        max_req_per_min: u64,
-    ) -> Result<RateLimitResult, Box<dyn Error>>;
+    fn is_limited(&self, key: &str, max_req_per_min: u64) -> anyhow::Result<RateLimitResult>;
 }
 
 #[derive(Debug)]

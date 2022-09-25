@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use chrono::{Duration, DurationRound, Utc};
 use redis::Commands;
 
@@ -24,11 +22,7 @@ impl RedisRateLimiter {
 }
 
 impl RateLimiter for RedisRateLimiter {
-    fn is_limited(
-        &self,
-        key: &str,
-        max_req_per_min: u64,
-    ) -> Result<RateLimitResult, Box<dyn Error>> {
+    fn is_limited(&self, key: &str, max_req_per_min: u64) -> anyhow::Result<RateLimitResult> {
         // Rate limiting is implemented using the basic algorithm suggested by
         // the Redis documentation:
         // https://redis.com/redis-best-practices/basic-rate-limiting/

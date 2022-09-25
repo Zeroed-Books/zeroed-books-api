@@ -1,4 +1,5 @@
 use sqlx::{Executor, PgPool, Postgres};
+use thiserror::Error;
 use uuid::Uuid;
 
 use crate::identities::domain::email::{Email, EmailVerification};
@@ -59,16 +60,12 @@ impl NewEmail {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum EmailPersistanceError {
-    DatabaseError(sqlx::Error),
+    #[error("database error: {0}")]
+    DatabaseError(#[from] sqlx::Error),
+    #[error("duplicate email address: {0:?}")]
     DuplicateEmail(NewEmail),
-}
-
-impl From<sqlx::Error> for EmailPersistanceError {
-    fn from(err: sqlx::Error) -> Self {
-        EmailPersistanceError::DatabaseError(err)
-    }
 }
 
 #[derive(Debug)]
