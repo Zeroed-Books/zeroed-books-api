@@ -5,10 +5,21 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::Serialize;
+use thiserror::Error;
+
+use crate::http_err::{ErrorRep, InternalServerError};
 
 pub use self::redis::RedisRateLimiter;
+
+#[derive(Debug, Error)]
+pub enum RateLimitError {
+    #[error("rate limited until {0}")]
+    LimitedUntil(DateTime<Utc>),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
 
 /// A requests-per-minute definition of a rate limiter.
 pub trait RateLimiter: Send + Sync {
@@ -28,10 +39,14 @@ pub trait RateLimiter: Send + Sync {
     /// requestor's rate limit state is returned. An [Err] is returned if the
     /// rate limiter encounters an error while trying to determine if the
     /// request should be rate limited.
+    #[deprecated = "Use `record_operation` for better error ergonomics."]
     fn is_limited(&self, key: &str, max_req_per_min: u64) -> anyhow::Result<RateLimitResult>;
+
+    fn record_operation(&self, key: &str, max_req_per_min: u64) -> Result<(), RateLimitError>;
 }
 
 #[derive(Debug)]
+#[deprecated = "Use `record_operation` for better error ergonomics."]
 pub enum RateLimitResult {
     /// The rate limit has not been exceeded.
     NotLimited,
@@ -41,6 +56,7 @@ pub enum RateLimitResult {
 }
 
 #[derive(Serialize)]
+#[deprecated = "Use `record_operation` for better error ergonomics."]
 pub struct RateLimitResponse {
     pub message: Option<String>,
 }
@@ -69,6 +85,25 @@ impl IntoResponse for RateLimitResult {
             // response in a failure scenario, but if a non-limited result is
             // converted, we just respond with a simple success status code.
             StatusCode::OK.into_response()
+        }
+    }
+}
+
+impl IntoResponse for RateLimitError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::LimitedUntil(_) => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorRep {
+                    message: "Too many requests. Please try again later".to_owned(),
+                }),
+            )
+                .into_response(),
+            Self::Other(error) => {
+                tracing::error!(?error, "Unhandled rate limiting error.");
+
+                InternalServerError::default().into_response()
+            }
         }
     }
 }

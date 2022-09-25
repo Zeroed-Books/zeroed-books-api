@@ -4,12 +4,13 @@ use anyhow::Context;
 use semval::ValidatedFrom;
 use sqlx::PgPool;
 use tera::Tera;
-use tracing::{debug, error};
+use thiserror::Error;
+use tracing::error;
 
 use crate::{
     email::clients::{EmailClient, Message},
     models::{self, NewUserModel},
-    rate_limit::{RateLimitResult, RateLimiter},
+    rate_limit::{RateLimitError, RateLimiter},
 };
 
 use super::{
@@ -32,19 +33,18 @@ pub struct UserService {
     templates: Tera,
 }
 
-pub enum CreateUserResult {
-    /// The new user was successfully created.
-    ///
-    /// This means that either the user did not already exist in the database
-    /// and has now been persisted, or the provided email was a duplicate and
-    /// a notice has been sent to the address.
-    Created(NewUser),
-
+#[derive(Debug, Error)]
+pub enum CreateUserError {
     /// The provided user data is invalid.
+    #[error("invalid user data: {0:?}")]
     InvalidUser(semval::context::Context<NewUserInvalidity>),
 
     /// The operation is rate limited for the provided client.
-    RateLimited(RateLimitResult),
+    #[error("operation is rate limited")]
+    RateLimited(#[from] RateLimitError),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl UserService {
@@ -94,28 +94,12 @@ impl UserService {
         &self,
         client_identifier: &str,
         new_user_data: NewUserData,
-    ) -> anyhow::Result<CreateUserResult> {
+    ) -> Result<NewUser, CreateUserError> {
         let rate_limit_key = format!("/identities/users_post_{}", client_identifier);
-        match self.rate_limiter.is_limited(&rate_limit_key, 10) {
-            Ok(RateLimitResult::NotLimited) => (),
-            Ok(result @ RateLimitResult::LimitedUntil(_)) => {
-                return Ok(CreateUserResult::RateLimited(result));
-            }
-            Err(error) => {
-                error!(?error, "Failed to query rate limiter for creating user.");
+        self.rate_limiter.record_operation(&rate_limit_key, 10)?;
 
-                return Err(error);
-            }
-        };
-
-        let new_user = match NewUser::validated_from(new_user_data) {
-            Ok(user) => user,
-            Err((_, context)) => {
-                debug!(?context, "New user data is invalid.");
-
-                return Ok(CreateUserResult::InvalidUser(context));
-            }
-        };
+        let new_user = NewUser::validated_from(new_user_data)
+            .map_err(|(_, context)| CreateUserError::InvalidUser(context))?;
 
         let user_model = models::NewUserModel::try_from(&new_user)
             .context("Failed to convert from domain to model.")?;
@@ -128,7 +112,8 @@ impl UserService {
                 EmailPersistanceError::DuplicateEmail(_) => {
                     let content = self
                         .templates
-                        .render("emails/duplicate.txt", &tera::Context::new())?;
+                        .render("emails/duplicate.txt", &tera::Context::new())
+                        .map_err(anyhow::Error::from)?;
 
                     let message = Message {
                         to: new_user.email().address().to_owned(),
@@ -141,12 +126,12 @@ impl UserService {
                         .await
                         .context("Failed to send duplicate registration email.")?;
 
-                    return Ok(CreateUserResult::Created(new_user));
+                    return Ok(new_user);
                 }
                 error => {
                     error!(?error, "Failed to persist new user.");
 
-                    return Err(error.into());
+                    return Err(anyhow::Error::from(error).into());
                 }
             }
         }
@@ -178,7 +163,7 @@ impl UserService {
             .await
             .context("Failed to send verification email.")?;
 
-        Ok(CreateUserResult::Created(new_user))
+        Ok(new_user)
     }
 
     async fn persist_new_user(

@@ -13,12 +13,10 @@ use axum::{
 use chrono::Duration;
 use client_ip::ClientIp;
 use http_err::{ApiError, ApiResponse};
-use identities::services::{CreateUserResult, UserService};
+use identities::services::{CreateUserError, UserService};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{error, trace};
-
-use crate::http_err::InternalServerError;
 
 pub mod authentication;
 pub mod cli;
@@ -75,15 +73,15 @@ pub async fn create_user(
         .create_user(&client_ip.to_string(), new_user_data.into())
         .await
     {
-        Ok(CreateUserResult::Created(user)) => Ok(CreateUserResponse::UserCreated(user.into())),
-        Ok(CreateUserResult::InvalidUser(context)) => {
+        Ok(user) => Ok(CreateUserResponse::UserCreated(user.into())),
+        Err(CreateUserError::InvalidUser(context)) => {
             Ok(CreateUserResponse::BadRequest(context.into()))
         }
-        Ok(CreateUserResult::RateLimited(result)) => Err(result.into()),
+        Err(CreateUserError::RateLimited(result)) => Err(result.into()),
         Err(error) => {
             error!(?error, "Failed to create new user.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -140,7 +138,7 @@ pub async fn verify_email(
         Err(err) => {
             error!(error = ?err, "Failed to verify email.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
