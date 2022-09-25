@@ -113,10 +113,14 @@ pub async fn run_with_sys_args() -> anyhow::Result<()> {
     let sentry_config = cli.sentry_dsn.map(|dsn| {
         debug!("Enabled sentry.");
 
+        let release_name = option_env!("GIT_SHA")
+            .map(Cow::from)
+            .or_else(|| sentry::release_name!());
+
         sentry::init((
             dsn,
             sentry::ClientOptions {
-                release: Some(Cow::from(env!("VERGEN_GIT_SHA"))),
+                release: release_name,
                 ..Default::default()
             },
         ))

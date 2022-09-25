@@ -1,5 +1,7 @@
 FROM rust:1 AS builder
 
+ARG GIT_SHA
+
 # Create appuser
 ENV USER=zeroed-books
 ENV UID=10001
@@ -17,6 +19,7 @@ WORKDIR /usr/src/zeroed-books-api
 
 COPY . .
 ENV SQLX_OFFLINE=true
+ENV GIT_SHA="${GIT_SHA}"
 RUN cargo build --locked --release
 
 

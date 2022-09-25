@@ -30,7 +30,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v3
         with:
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           push: true
           tags: zeroedbooks/api:latest,zeroedbooks/api:${{ env.IMAGE_TAG }}
-          cache-from: type=registry,ref=zeroedbooks/api:latest
-          cache-to: type=inline

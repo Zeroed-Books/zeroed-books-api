@@ -62,7 +62,3 @@ features = ["async"]
 [dependencies.tera]
 version = "1.12.1"
 default-features = false
-
-[build-dependencies]
-anyhow = { version = "1.0.56" }
-vergen = { version = "7.4.2", default-featuers = false, features = ["git"] }
