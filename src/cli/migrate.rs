@@ -1,6 +1,6 @@
 use sqlx::{migrate::Migrator, postgres::PgPoolOptions};
 
-static MIGRATOR: Migrator = sqlx::migrate!("./migrations-sqlx");
+static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 pub struct MigrationOpts {
     pub database_url: String,

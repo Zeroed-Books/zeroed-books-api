@@ -46,7 +46,7 @@ jobs:
         run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
 
       - name: Run database migrations
-        run: cargo sqlx migrate run --source migrations-sqlx
+        run: cargo sqlx migrate run
 
       - name: Verify query data
         run: cargo sqlx prepare --check
