@@ -11,6 +11,7 @@ use tera::Tera;
 use tower_http::cors::{self, CorsLayer};
 
 use crate::{
+    database::PostgresConnection,
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
     identities::services::UserService,
     rate_limit::{RateLimiter, RedisRateLimiter},
@@ -64,11 +65,14 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let rate_limiter: Arc<dyn RateLimiter> = Arc::new(RedisRateLimiter::new(&opts.redis_url)?);
 
+    let db_connection = PostgresConnection::new(db_pool.clone());
+
     let user_service = UserService::new(
-        db_pool.clone(),
         email_client.clone(),
+        Arc::new(db_connection.clone()),
         rate_limiter.clone(),
         tera.clone(),
+        Arc::new(db_connection),
     );
 
     let cors = CorsLayer::new()

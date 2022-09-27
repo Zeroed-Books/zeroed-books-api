@@ -21,6 +21,7 @@ use tracing::{error, trace};
 pub mod authentication;
 pub mod cli;
 pub mod client_ip;
+mod database;
 mod email;
 mod http_err;
 mod identities;
@@ -28,6 +29,7 @@ pub mod ledger;
 mod models;
 pub mod passwords;
 mod rate_limit;
+mod repos;
 mod server;
 
 #[derive(Serialize)]

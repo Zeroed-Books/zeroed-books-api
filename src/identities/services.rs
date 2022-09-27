@@ -2,15 +2,15 @@ use std::{convert::TryFrom, sync::Arc};
 
 use anyhow::Context;
 use semval::ValidatedFrom;
-use sqlx::PgPool;
 use tera::Tera;
 use thiserror::Error;
 use tracing::error;
 
 use crate::{
     email::clients::{EmailClient, Message},
-    models::{self, NewUserModel},
+    models::{self},
     rate_limit::{RateLimitError, RateLimiter},
+    repos::{DynEmailRepo, DynUserRepo, UserPersistenceError},
 };
 
 use super::{
@@ -18,7 +18,7 @@ use super::{
         email::EmailVerification,
         users::{NewUser, NewUserData, NewUserInvalidity},
     },
-    models::email::{EmailPersistanceError, NewEmail, NewEmailVerification},
+    models::email::{NewEmail, NewEmailVerification},
 };
 
 pub type DynEmailClient = Arc<dyn EmailClient>;
@@ -27,10 +27,11 @@ pub type DynRateLimiter = Arc<dyn RateLimiter>;
 /// A service object providing functionality relating to users.
 #[derive(Clone)]
 pub struct UserService {
-    db: PgPool,
     email_client: DynEmailClient,
+    email_repo: DynEmailRepo,
     rate_limiter: DynRateLimiter,
     templates: Tera,
+    user_repo: DynUserRepo,
 }
 
 #[derive(Debug, Error)]
@@ -52,26 +53,31 @@ impl UserService {
     ///
     /// # Arguments
     ///
-    /// * `db` - The database executor to use.
     /// * `email_client` - The client used to send emails.
+    /// * `email_repo` - The repository used to persist and query email
+    ///   information.
     /// * `rate_limiter` - The rate limiter to use for rate limited operations.
     /// * `templates` - The templating engine to use for composing email
     ///   content.
+    /// * `user_repo` - The repository used to persist and query user
+    ///   information.
     ///
     /// # Returns
     ///
     /// A new [`UserService`] instance.
     pub fn new(
-        db: PgPool,
         email_client: DynEmailClient,
+        email_repo: DynEmailRepo,
         rate_limiter: DynRateLimiter,
         templates: Tera,
+        user_repo: DynUserRepo,
     ) -> Self {
         Self {
-            db,
             email_client,
+            email_repo,
             rate_limiter,
             templates,
+            user_repo,
         }
     }
 
@@ -105,11 +111,14 @@ impl UserService {
             .context("Failed to convert from domain to model.")?;
         let email_model = NewEmail::for_user(new_user.id(), new_user.email());
 
-        let persistance_result = self.persist_new_user(&user_model, &email_model).await;
+        let persistance_result = self
+            .user_repo
+            .persist_new_user(&user_model, &email_model)
+            .await;
 
         if let Err(persistence_err) = persistance_result {
             match persistence_err {
-                EmailPersistanceError::DuplicateEmail(_) => {
+                UserPersistenceError::DuplicateEmail(_) => {
                     let content = self
                         .templates
                         .render("emails/duplicate.txt", &tera::Context::new())
@@ -139,8 +148,8 @@ impl UserService {
         let verification = EmailVerification::new();
         let verification_model = NewEmailVerification::new(email_model.id(), &verification);
 
-        verification_model
-            .save(&self.db)
+        self.email_repo
+            .insert_verification(&verification_model)
             .await
             .context("Failed to save email verification model.")?;
 
@@ -164,30 +173,5 @@ impl UserService {
             .context("Failed to send verification email.")?;
 
         Ok(new_user)
-    }
-
-    async fn persist_new_user(
-        &self,
-        user: &NewUserModel,
-        email: &NewEmail,
-    ) -> Result<(), EmailPersistanceError> {
-        let mut tx = self.db.begin().await?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO "user" (id, password)
-            VALUES ($1, $2)
-            "#,
-            user.id,
-            user.password_hash
-        )
-        .execute(&mut tx)
-        .await?;
-
-        email.save(&mut tx).await?;
-
-        tx.commit().await?;
-
-        Ok(())
     }
 }
