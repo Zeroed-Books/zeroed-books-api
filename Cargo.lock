@@ -554,12 +554,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dtoa"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
-
-[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1538,15 +1532,15 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.21.5"
+version = "0.21.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a80b5f38d7f5a020856a0e16e40a9cfabf88ae8f0e4c2dcd8a3114c1e470852"
+checksum = "571c252c68d09a2ad3e49edd14e9ee48932f3e0f27b06b4ea4c9b2a706d31103"
 dependencies = [
  "async-trait",
  "combine",
- "dtoa",
- "itoa 0.4.7",
+ "itoa 1.0.1",
  "percent-encoding",
+ "ryu",
  "sha1 0.6.0",
  "url",
 ]
@@ -2240,18 +2234,18 @@ checksum = "949517c0cf1bf4ee812e2e07e08ab448e3ae0d23472aee8a06c985f0c8815b16"
 
 [[package]]
 name = "thiserror"
-version = "1.0.35"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c53f98874615aea268107765aa1ed8f6116782501d18e53d08b471733bea6c85"
+checksum = "10deb33631e3c9018b9baf9dcbbc4f737320d2b576bac10f6aefa048fa407e3e"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.35"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8b463991b4eab2d801e724172285ec4195c650e8ec79b149e6c2a8e6dd3f783"
+checksum = "982d17546b47146b28f7c22e3d08465f6b8903d0ea13c1660d9d84a6e7adcdbb"
 dependencies = [
  "proc-macro2",
  "quote",
