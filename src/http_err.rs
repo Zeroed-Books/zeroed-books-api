@@ -5,27 +5,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::error;
 
-use crate::rate_limit::{RateLimitError, RateLimitResult};
-
-#[derive(Serialize)]
-#[deprecated = "Use `ApiError::InternalServerError` directly."]
-pub struct InternalServerError {
-    pub message: String,
-}
-
-impl Default for InternalServerError {
-    fn default() -> Self {
-        Self {
-            message: "Internal server error.".to_string(),
-        }
-    }
-}
-
-impl IntoResponse for InternalServerError {
-    fn into_response(self) -> Response {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(self)).into_response()
-    }
-}
+use crate::rate_limit::RateLimitError;
 
 #[derive(Debug, Error)]
 pub enum ApiError {
@@ -33,9 +13,6 @@ pub enum ApiError {
     InternalServerError,
     #[error(transparent)]
     RateLimited(#[from] RateLimitError),
-    #[error("rate limited")]
-    #[deprecated]
-    TooManyRequests(RateLimitResult),
 }
 
 impl IntoResponse for ApiError {
@@ -43,7 +20,6 @@ impl IntoResponse for ApiError {
         match self {
             Self::InternalServerError => internal_server_error_response(),
             Self::RateLimited(error) => rate_limit_error_to_response(error),
-            Self::TooManyRequests(result) => result.into_response(),
         }
     }
 }
@@ -70,20 +46,8 @@ fn rate_limit_error_to_response(error: RateLimitError) -> Response {
         RateLimitError::Other(error) => {
             error!(?error, "Unhandled rate limiting error.");
 
-            InternalServerError::default().into_response()
+            ApiError::InternalServerError.into_response()
         }
-    }
-}
-
-impl From<InternalServerError> for ApiError {
-    fn from(_: InternalServerError) -> Self {
-        Self::InternalServerError
-    }
-}
-
-impl From<RateLimitResult> for ApiError {
-    fn from(result: RateLimitResult) -> Self {
-        Self::TooManyRequests(result)
     }
 }
 

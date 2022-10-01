@@ -16,9 +16,9 @@ use uuid::Uuid;
 
 use crate::{
     client_ip::ClientIp,
-    http_err::{ApiResponse, InternalServerError},
+    http_err::{ApiError, ApiResponse},
     passwords,
-    rate_limit::{RateLimitResult, RateLimiter},
+    rate_limit::{RateLimitError, RateLimiter},
     server::AppState,
 };
 
@@ -63,16 +63,13 @@ async fn create_cookie_session(
     Json(credentials): Json<EmailPasswordPair>,
 ) -> ApiResponse<CreateSessionResponse> {
     let rate_limit_key = format!("/authentication/cookie-sessions_post_{}", client_ip);
-    match rate_limiter.is_limited(&rate_limit_key, 10) {
-        Ok(RateLimitResult::NotLimited) => (),
-        Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
+    match rate_limiter.record_operation(&rate_limit_key, 10) {
+        Ok(_) => (),
+        Err(result @ RateLimitError::LimitedUntil(_)) => return Err(result.into()),
         Err(err) => {
             error!(error = ?err, "Failed to query rate limiter.");
 
-            return Err(InternalServerError {
-                message: "Internal server error.".to_string(),
-            }
-            .into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -88,10 +85,7 @@ async fn create_cookie_session(
         Err(error) => {
             error!(?error, "Error finding user by email.");
 
-            return Err(InternalServerError {
-                message: "Internal server error.".to_string(),
-            }
-            .into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -100,7 +94,7 @@ async fn create_cookie_session(
         Err(error) => {
             error!(?error, "Invalid password hash received from model.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -125,7 +119,7 @@ async fn create_cookie_session(
         Err(error) => {
             error!(?error, "Failed to compare password and hash.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }

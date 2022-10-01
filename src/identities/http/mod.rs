@@ -16,10 +16,10 @@ use crate::{
     client_ip::ClientIp,
     create_user,
     email::clients::EmailClient,
-    http_err::{ApiResponse, InternalServerError},
+    http_err::{ApiError, ApiResponse},
     identities::queries::{postgres::PostgresQueries, PasswordResetQueries},
     passwords::Password,
-    rate_limit::{RateLimitResult, RateLimiter},
+    rate_limit::{RateLimitError, RateLimiter},
     server::AppState,
     verify_email,
 };
@@ -76,13 +76,13 @@ async fn create_password_reset(
     Json(reset_data): Json<reps::PasswordReset>,
 ) -> ApiResponse<ResetPasswordResponse> {
     let rate_limit_key = format!("/identities/password-resets_post_{}", client_ip);
-    match rate_limiter.is_limited(&rate_limit_key, 10) {
-        Ok(RateLimitResult::NotLimited) => (),
-        Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
+    match rate_limiter.record_operation(&rate_limit_key, 10) {
+        Ok(_) => (),
+        Err(result @ RateLimitError::LimitedUntil(_)) => return Err(result.into()),
         Err(error) => {
             error!(?error, "Failed to query rate limiter.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -106,7 +106,7 @@ async fn create_password_reset(
         Err(error) => {
             error!(?error, "Failed to query for password reset.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -126,7 +126,7 @@ async fn create_password_reset(
         Err(error) => {
             error!(?error, "Failed to change user's password.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -166,13 +166,13 @@ async fn create_password_reset_request(
     Json(reset_request): Json<reps::PasswordResetRequest>,
 ) -> ApiResponse<CreatePasswordResetResponse> {
     let rate_limit_key = format!("/identities/password-reset-requests_post_{}", client_ip);
-    match rate_limiter.is_limited(&rate_limit_key, 10) {
-        Ok(RateLimitResult::NotLimited) => (),
-        Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
+    match rate_limiter.record_operation(&rate_limit_key, 10) {
+        Ok(_) => (),
+        Err(result @ RateLimitError::LimitedUntil(_)) => return Err(result.into()),
         Err(error) => {
             error!(?error, "Failed to query rate limiter.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -192,7 +192,7 @@ async fn create_password_reset_request(
         Err(error) => {
             error!(?error, "Failed to save password reset token.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
