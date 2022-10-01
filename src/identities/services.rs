@@ -10,7 +10,7 @@ use crate::{
     email::clients::{EmailClient, Message},
     models::{self},
     rate_limit::{RateLimitError, RateLimiter},
-    repos::{DynEmailRepo, DynUserRepo, UserPersistenceError},
+    repos::{DynEmailRepo, DynUserRepo, EmailVerificationError, UserPersistenceError},
 };
 
 use super::{
@@ -20,6 +20,25 @@ use super::{
     },
     models::email::{NewEmail, NewEmailVerification},
 };
+
+/// A service object providing functionality relating to emails.
+#[derive(Clone)]
+pub struct EmailService {
+    email_repo: DynEmailRepo,
+}
+
+impl EmailService {
+    pub fn new(email_repo: DynEmailRepo) -> Self {
+        Self { email_repo }
+    }
+
+    pub async fn verify_email(&self, token: &str) -> Result<String, EmailVerificationError> {
+        let verified_address = self.email_repo.mark_email_as_verified(token).await?;
+        self.email_repo.delete_verification_by_token(token).await?;
+
+        Ok(verified_address)
+    }
+}
 
 pub type DynEmailClient = Arc<dyn EmailClient>;
 pub type DynRateLimiter = Arc<dyn RateLimiter>;

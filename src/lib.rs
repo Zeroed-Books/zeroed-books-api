@@ -10,13 +10,12 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use chrono::Duration;
 use client_ip::ClientIp;
 use http_err::{ApiError, ApiResponse};
-use identities::services::{CreateUserError, UserService};
+use identities::services::{CreateUserError, EmailService, UserService};
+use repos::EmailVerificationError;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use tracing::{error, trace};
+use tracing::error;
 
 pub mod authentication;
 pub mod cli;
@@ -120,18 +119,18 @@ impl IntoResponse for EmailVerificationResponse {
 }
 
 pub async fn verify_email(
-    State(db): State<PgPool>,
+    State(email_service): State<EmailService>,
     Json(verification_request): Json<EmailVerificationRequest>,
 ) -> ApiResponse<EmailVerificationResponse> {
-    let verification_result = mark_email_as_verified(&db, &verification_request.token).await;
+    let verification_result = email_service
+        .verify_email(&verification_request.token)
+        .await;
 
     match verification_result {
-        Ok(EmailVerificationResult::EmailVerified(address)) => {
-            Ok(EmailVerificationResponse::Verified(EmailVerified {
-                email: address,
-            }))
-        }
-        Ok(EmailVerificationResult::NotFound) => {
+        Ok(address) => Ok(EmailVerificationResponse::Verified(EmailVerified {
+            email: address,
+        })),
+        Err(EmailVerificationError::InvalidToken) => {
             Ok(EmailVerificationResponse::BadRequest(VerificationError {
                 message: "The provided verification token is either invalid or has expired."
                     .to_string(),
@@ -142,56 +141,5 @@ pub async fn verify_email(
 
             Err(ApiError::InternalServerError)
         }
-    }
-}
-
-enum EmailVerificationResult {
-    EmailVerified(String),
-    NotFound,
-}
-
-async fn mark_email_as_verified(
-    db: &PgPool,
-    token: &str,
-) -> Result<EmailVerificationResult, sqlx::Error> {
-    let now = chrono::Utc::now();
-    let expiration = now - Duration::days(1);
-
-    trace!(%now, %expiration, "Verifying email address.");
-
-    let verified_address = sqlx::query!(
-        r#"
-        WITH pending_verification_emails AS (
-            SELECT email_id
-            FROM email_verification
-            WHERE token = $1 AND created_at > $2
-        )
-        UPDATE email
-        SET verified_at = now()
-        WHERE id = ANY(SELECT * FROM pending_verification_emails)
-        RETURNING provided_address
-        "#,
-        token,
-        expiration
-    )
-    .fetch_optional(db)
-    .await?
-    .map(|record| record.provided_address);
-
-    match verified_address {
-        Some(address) => {
-            sqlx::query!(
-                r#"
-                DELETE FROM email_verification
-                WHERE token = $1
-                "#,
-                token
-            )
-            .execute(db)
-            .await?;
-
-            Ok(EmailVerificationResult::EmailVerified(address))
-        }
-        None => Ok(EmailVerificationResult::NotFound),
     }
 }
