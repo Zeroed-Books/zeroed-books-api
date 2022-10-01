@@ -4,38 +4,23 @@
 #![allow(clippy::new_without_default)]
 #![deny(elided_lifetimes_in_paths)]
 
-use std::{convert::TryInto, sync::Arc};
-
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use chrono::Duration;
 use client_ip::ClientIp;
-use email::clients::{EmailClient, Message};
 use http_err::{ApiError, ApiResponse};
-use identities::{
-    domain::{
-        email::EmailVerification,
-        users::{NewUser, NewUserData},
-    },
-    models::email::{EmailPersistanceError, NewEmail, NewEmailVerification},
-};
-use models::NewUserModel;
-use rate_limit::{RateLimitResult, RateLimiter};
-use semval::ValidatedFrom;
+use identities::services::{CreateUserError, EmailService, UserService};
+use repos::EmailVerificationError;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use tera::{Context, Tera};
-use tracing::{error, trace};
-
-use crate::http_err::InternalServerError;
+use tracing::error;
 
 pub mod authentication;
 pub mod cli;
 pub mod client_ip;
+mod database;
 mod email;
 mod http_err;
 mod identities;
@@ -43,6 +28,7 @@ pub mod ledger;
 mod models;
 pub mod passwords;
 mod rate_limit;
+mod repos;
 mod server;
 
 #[derive(Serialize)]
@@ -80,163 +66,25 @@ impl From<identities::http::reps::NewUserValidationError> for CreateUserResponse
 }
 
 pub async fn create_user(
-    State(db): State<PgPool>,
     ClientIp(client_ip): ClientIp,
-    State(email_client): State<Arc<dyn EmailClient>>,
-    State(rate_limiter): State<Arc<dyn RateLimiter>>,
-    State(templates): State<Tera>,
+    State(user_service): State<UserService>,
     Json(new_user_data): Json<identities::http::reps::NewUserRequest>,
 ) -> Result<CreateUserResponse, ApiError> {
-    let rate_limit_key = format!("/users_post_{}", client_ip);
-    match rate_limiter.is_limited(&rate_limit_key, 10) {
-        Ok(RateLimitResult::NotLimited) => (),
-        Ok(result @ RateLimitResult::LimitedUntil(_)) => return Err(result.into()),
-        Err(err) => {
-            error!(error = ?err, "Failed to query rate limiter.");
-
-            return Err(InternalServerError::default().into());
+    match user_service
+        .create_user(&client_ip.to_string(), new_user_data.into())
+        .await
+    {
+        Ok(user) => Ok(CreateUserResponse::UserCreated(user.into())),
+        Err(CreateUserError::InvalidUser(context)) => {
+            Ok(CreateUserResponse::BadRequest(context.into()))
         }
-    };
-
-    // TODO: Validate both password and email, so both sets of errors can be
-    //       presented in the same response.
-
-    let new_user = match NewUser::validated_from(NewUserData::from(new_user_data)) {
-        Ok(user) => user,
-        Err((_, context)) => {
-            return Ok(identities::http::reps::NewUserValidationError::from(context).into())
-        }
-    };
-
-    let user_model: models::NewUserModel = match (&new_user).try_into() {
-        Ok(model) => model,
+        Err(CreateUserError::RateLimited(result)) => Err(result.into()),
         Err(error) => {
-            error!(?error, "Failed to convert new user to model.");
+            error!(?error, "Failed to create new user.");
 
-            return Err(InternalServerError::default().into());
-        }
-    };
-    let email_model = NewEmail::for_user(new_user.id(), new_user.email());
-    let new_email_id = email_model.id();
-
-    let persistance_result = persist_new_user(&db, user_model, email_model).await;
-
-    if let Err(persistence_err) = persistance_result {
-        match persistence_err {
-            EmailPersistanceError::DuplicateEmail(_) => {
-                let content = templates
-                    .render("emails/duplicate.txt", &Context::new())
-                    .expect("template failure");
-
-                let message = Message {
-                    to: new_user.email().address().to_owned(),
-                    subject: "Duplicate Registration".to_owned(),
-                    text: content,
-                };
-
-                match email_client.send(&message).await {
-                    Ok(()) => {
-                        return Ok(CreateUserResponse::UserCreated(
-                            identities::http::reps::NewUserResponse {
-                                email: new_user.email().address().to_owned(),
-                            },
-                        ))
-                    }
-                    Err(e) => {
-                        error!(
-                            error = ?e,
-                            "Failed to send duplicate registration email."
-                        );
-
-                        return Err(InternalServerError {
-                            message: "Internal server error.".to_owned(),
-                        }
-                        .into());
-                    }
-                }
-            }
-            error => {
-                error!(?error, "Failed to persist new user.");
-
-                return Err(InternalServerError {
-                    message: "Internal server error.".to_owned(),
-                }
-                .into());
-            }
+            Err(ApiError::InternalServerError)
         }
     }
-
-    let verification = EmailVerification::new();
-    let verification_model = NewEmailVerification::new(new_email_id, &verification);
-
-    let verification_save_result = verification_model.save(&db).await;
-    match verification_save_result {
-        Ok(()) => (),
-        Err(err) => {
-            error!(
-                error = ?err,
-                "Failed to save email verification model."
-            );
-
-            return Err(InternalServerError::default().into());
-        }
-    };
-
-    let mut verification_context = Context::new();
-    verification_context.insert("token", verification.token());
-
-    let content = templates
-        .render("emails/verify.txt", &verification_context)
-        .expect("template failure");
-
-    let message = Message {
-        to: new_user.email().address().to_owned(),
-        subject: "Please Confirm your Email".to_owned(),
-        text: content,
-    };
-
-    match email_client.send(&message).await {
-        Ok(()) => (),
-        Err(e) => {
-            error!(error = ?e, "Failed to send verification email.");
-
-            return Err(InternalServerError {
-                message: "Internal server error.".to_owned(),
-            }
-            .into());
-        }
-    }
-
-    Ok(CreateUserResponse::UserCreated(
-        identities::http::reps::NewUserResponse {
-            email: new_user.email().address().to_owned(),
-        },
-    ))
-}
-
-async fn persist_new_user(
-    conn: &PgPool,
-    user: NewUserModel,
-    email: NewEmail,
-) -> Result<(), EmailPersistanceError> {
-    let mut tx = conn.begin().await?;
-
-    sqlx::query!(
-        r#"
-        INSERT INTO "user" (id, password)
-        VALUES ($1, $2)
-        "#,
-        user.id,
-        user.password_hash
-    )
-    .execute(&mut tx)
-    .await?;
-
-    email.save(&mut tx).await?;
-
-    tx.commit().await?;
-
-    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -271,18 +119,18 @@ impl IntoResponse for EmailVerificationResponse {
 }
 
 pub async fn verify_email(
-    State(db): State<PgPool>,
+    State(email_service): State<EmailService>,
     Json(verification_request): Json<EmailVerificationRequest>,
 ) -> ApiResponse<EmailVerificationResponse> {
-    let verification_result = mark_email_as_verified(&db, &verification_request.token).await;
+    let verification_result = email_service
+        .verify_email(&verification_request.token)
+        .await;
 
     match verification_result {
-        Ok(EmailVerificationResult::EmailVerified(address)) => {
-            Ok(EmailVerificationResponse::Verified(EmailVerified {
-                email: address,
-            }))
-        }
-        Ok(EmailVerificationResult::NotFound) => {
+        Ok(address) => Ok(EmailVerificationResponse::Verified(EmailVerified {
+            email: address,
+        })),
+        Err(EmailVerificationError::InvalidToken) => {
             Ok(EmailVerificationResponse::BadRequest(VerificationError {
                 message: "The provided verification token is either invalid or has expired."
                     .to_string(),
@@ -291,58 +139,7 @@ pub async fn verify_email(
         Err(err) => {
             error!(error = ?err, "Failed to verify email.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
-    }
-}
-
-enum EmailVerificationResult {
-    EmailVerified(String),
-    NotFound,
-}
-
-async fn mark_email_as_verified(
-    db: &PgPool,
-    token: &str,
-) -> Result<EmailVerificationResult, sqlx::Error> {
-    let now = chrono::Utc::now();
-    let expiration = now - Duration::days(1);
-
-    trace!(%now, %expiration, "Verifying email address.");
-
-    let verified_address = sqlx::query!(
-        r#"
-        WITH pending_verification_emails AS (
-            SELECT email_id
-            FROM email_verification
-            WHERE token = $1 AND created_at > $2
-        )
-        UPDATE email
-        SET verified_at = now()
-        WHERE id = ANY(SELECT * FROM pending_verification_emails)
-        RETURNING provided_address
-        "#,
-        token,
-        expiration
-    )
-    .fetch_optional(db)
-    .await?
-    .map(|record| record.provided_address);
-
-    match verified_address {
-        Some(address) => {
-            sqlx::query!(
-                r#"
-                DELETE FROM email_verification
-                WHERE token = $1
-                "#,
-                token
-            )
-            .execute(db)
-            .await?;
-
-            Ok(EmailVerificationResult::EmailVerified(address))
-        }
-        None => Ok(EmailVerificationResult::NotFound),
     }
 }

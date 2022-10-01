@@ -11,7 +11,9 @@ use tera::Tera;
 use tower_http::cors::{self, CorsLayer};
 
 use crate::{
+    database::PostgresConnection,
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
+    identities::services::{EmailService, UserService},
     rate_limit::{RateLimiter, RedisRateLimiter},
 };
 
@@ -34,9 +36,11 @@ pub struct Options {
 pub struct AppState {
     db: PgPool,
     email_client: Arc<dyn EmailClient>,
+    email_service: EmailService,
     key: Key,
     rate_limiter: Arc<dyn RateLimiter>,
     tera: Tera,
+    user_service: UserService,
 }
 
 pub async fn serve(opts: Options) -> anyhow::Result<()> {
@@ -62,6 +66,17 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let rate_limiter: Arc<dyn RateLimiter> = Arc::new(RedisRateLimiter::new(&opts.redis_url)?);
 
+    let db_connection = PostgresConnection::new(db_pool.clone());
+
+    let email_service = EmailService::new(Arc::new(db_connection.clone()));
+    let user_service = UserService::new(
+        email_client.clone(),
+        Arc::new(db_connection.clone()),
+        rate_limiter.clone(),
+        tera.clone(),
+        Arc::new(db_connection),
+    );
+
     let cors = CorsLayer::new()
         .allow_credentials(true)
         .allow_headers([header::CONTENT_TYPE])
@@ -71,9 +86,11 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
     let state = AppState {
         db: db_pool,
         email_client,
+        email_service,
         key: Key::from(opts.secret_key.as_bytes()),
         rate_limiter,
         tera,
+        user_service,
     };
 
     let app = Router::new()
@@ -122,5 +139,17 @@ impl FromRef<AppState> for Arc<dyn EmailClient> {
 impl FromRef<AppState> for Arc<dyn RateLimiter> {
     fn from_ref(state: &AppState) -> Self {
         state.rate_limiter.clone()
+    }
+}
+
+impl FromRef<AppState> for EmailService {
+    fn from_ref(state: &AppState) -> Self {
+        state.email_service.clone()
+    }
+}
+
+impl FromRef<AppState> for UserService {
+    fn from_ref(state: &AppState) -> Self {
+        state.user_service.clone()
     }
 }

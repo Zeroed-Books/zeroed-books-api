@@ -1,9 +1,7 @@
-use std::error::Error;
-
 use chrono::{Duration, DurationRound, Utc};
 use redis::Commands;
 
-use super::{RateLimitResult, RateLimiter};
+use super::RateLimiter;
 
 /// A rate limiter that uses Redis as a backing store.
 pub struct RedisRateLimiter {
@@ -24,16 +22,16 @@ impl RedisRateLimiter {
 }
 
 impl RateLimiter for RedisRateLimiter {
-    fn is_limited(
+    fn record_operation(
         &self,
         key: &str,
         max_req_per_min: u64,
-    ) -> Result<RateLimitResult, Box<dyn Error>> {
+    ) -> Result<(), super::RateLimitError> {
         // Rate limiting is implemented using the basic algorithm suggested by
         // the Redis documentation:
         // https://redis.com/redis-best-practices/basic-rate-limiting/
 
-        let mut conn = self.client.get_connection()?;
+        let mut conn = self.client.get_connection().map_err(anyhow::Error::from)?;
 
         // We only do per-minute rate limiting. This means we can use the
         // current minute as our cache key because by the time it's used again,
@@ -43,7 +41,7 @@ impl RateLimiter for RedisRateLimiter {
 
         let cache_key = format!("{}:{}", key, current_minute);
 
-        let hits: Option<u64> = conn.get(&cache_key)?;
+        let hits: Option<u64> = conn.get(&cache_key).map_err(anyhow::Error::from)?;
         if let Some(hit_count) = hits {
             if hit_count > max_req_per_min {
                 // Rate limit for the current minute has already been exceeded,
@@ -62,7 +60,7 @@ impl RateLimiter for RedisRateLimiter {
                     // here, so we can just unwrap the result.
                     .expect("failed to truncate time");
 
-                return Ok(RateLimitResult::LimitedUntil(limit_expiration));
+                return Err(super::RateLimitError::LimitedUntil(limit_expiration));
             }
         }
 
@@ -84,6 +82,6 @@ impl RateLimiter for RedisRateLimiter {
             .arg(59)
             .execute(&mut conn);
 
-        Ok(RateLimitResult::NotLimited)
+        Ok(())
     }
 }

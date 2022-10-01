@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     identities::{
         domain::{
-            self, email::EmailInvalidity, password_resets::PasswordResetTokenInvalidity,
-            users::NewUserInvalidity,
+            self,
+            email::EmailInvalidity,
+            password_resets::PasswordResetTokenInvalidity,
+            users::{NewUser, NewUserInvalidity},
         },
         queries,
     },
@@ -30,6 +32,14 @@ impl From<NewUserRequest> for domain::users::NewUserData {
 #[derive(Serialize)]
 pub struct NewUserResponse {
     pub email: String,
+}
+
+impl From<NewUser> for NewUserResponse {
+    fn from(user: NewUser) -> Self {
+        Self {
+            email: user.email().address().to_owned(),
+        }
+    }
 }
 
 #[derive(Default, Serialize)]

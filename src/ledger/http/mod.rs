@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     authentication::domain::session::{ExtractSession, Session},
-    http_err::{ApiError, ApiResponse, ErrorRep, InternalServerError},
+    http_err::{ApiError, ApiResponse, ErrorRep},
     server::AppState,
 };
 
@@ -59,7 +59,7 @@ async fn delete_transaction(
         Err(error) => {
             error!(?error, "Failed to delete transaction.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -81,7 +81,7 @@ async fn get_account_balance(
         Err(error) => {
             error!(%account, ?error, "Failed to query for account balance.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -106,7 +106,7 @@ async fn get_accounts(
         Err(error) => {
             error!(?error, "Failed to list accounts.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -151,7 +151,7 @@ async fn get_transaction(
         Err(error) => {
             error!(?error, "Failed to query for transaction.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -187,7 +187,7 @@ async fn get_transactions(
         Err(error) => {
             error!(?error, "Failed to list transactions.");
 
-            Err(InternalServerError::default().into())
+            Err(ApiError::InternalServerError)
         }
     }
 }
@@ -231,7 +231,7 @@ async fn create_transaction(
         Err(error) => {
             error!(?error, currency_codes = ?new_transaction.used_currency_codes(), "Failed to fetch currencies used in transaction.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -247,7 +247,7 @@ async fn create_transaction(
         Err(error) => {
             error!(?error, "Failed to persist transaction.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -296,7 +296,7 @@ async fn update_transaction(
         Err(error) => {
             error!(?error, currency_codes = ?updated_transaction.used_currency_codes(), "Failed to fetch currencies used in transaction.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 
@@ -321,7 +321,7 @@ async fn update_transaction(
         Err(error) => {
             error!(?error, %transaction_id, "Failed to update transaction.");
 
-            return Err(InternalServerError::default().into());
+            return Err(ApiError::InternalServerError);
         }
     };
 

@@ -2,52 +2,52 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
+use thiserror::Error;
 use tracing::error;
 
-use crate::rate_limit::RateLimitResult;
+use crate::rate_limit::RateLimitError;
 
-#[derive(Serialize)]
-pub struct InternalServerError {
-    pub message: String,
-}
-
-impl Default for InternalServerError {
-    fn default() -> Self {
-        Self {
-            message: "Internal server error.".to_string(),
-        }
-    }
-}
-
-impl IntoResponse for InternalServerError {
-    fn into_response(self) -> Response {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(self)).into_response()
-    }
-}
-
+#[derive(Debug, Error)]
 pub enum ApiError {
-    InternalServerError(InternalServerError),
-    TooManyRequests(RateLimitResult),
+    #[error("internal server error")]
+    InternalServerError,
+    #[error(transparent)]
+    RateLimited(#[from] RateLimitError),
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         match self {
-            Self::InternalServerError(inner) => inner.into_response(),
-            Self::TooManyRequests(result) => result.into_response(),
+            Self::InternalServerError => internal_server_error_response(),
+            Self::RateLimited(error) => rate_limit_error_to_response(error),
         }
     }
 }
 
-impl From<InternalServerError> for ApiError {
-    fn from(error: InternalServerError) -> Self {
-        Self::InternalServerError(error)
-    }
+fn internal_server_error_response() -> Response {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorRep {
+            message: "Internal server error.".to_owned(),
+        }),
+    )
+        .into_response()
 }
 
-impl From<RateLimitResult> for ApiError {
-    fn from(result: RateLimitResult) -> Self {
-        Self::TooManyRequests(result)
+fn rate_limit_error_to_response(error: RateLimitError) -> Response {
+    match error {
+        RateLimitError::LimitedUntil(_) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ErrorRep {
+                message: "Too many requests. Please try again later".to_owned(),
+            }),
+        )
+            .into_response(),
+        RateLimitError::Other(error) => {
+            error!(?error, "Unhandled rate limiting error.");
+
+            ApiError::InternalServerError.into_response()
+        }
     }
 }
 
@@ -55,7 +55,7 @@ impl From<anyhow::Error> for ApiError {
     fn from(error: anyhow::Error) -> Self {
         error!(?error, "Received error.");
 
-        Self::InternalServerError(Default::default())
+        Self::InternalServerError
     }
 }
 
