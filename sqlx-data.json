@@ -227,7 +227,7 @@
     },
     "query": "\n            SELECT code, symbol, minor_units\n            FROM currency\n            WHERE code = $1\n            "
   },
-  "847971f288b8523ae7311d081bc22b09477e7d6b044e72cead44260f5229484d": {
+  "974373028857aa523c743fb183c1ac4ae8a9f0aec8b88adf78e9c7bb4b9358cc": {
     "describe": {
       "columns": [],
       "nullable": [],
@@ -237,20 +237,7 @@
         ]
       }
     },
-    "query": "\n                DELETE FROM email_verification\n                WHERE token = $1\n                "
-  },
-  "91ffbb3e8265046387cda5295aaf25a553e960eab8b8ff99328f604b5c275631": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n        INSERT INTO \"user\" (id, password)\n        VALUES ($1, $2)\n        "
+    "query": "\n                    DELETE FROM email_verification\n                    WHERE token = $1\n                    "
   },
   "9df3cf96fdece6dbc1982c9b2ad50db5347493c14befa471e0a4a57c3c698c0f": {
     "describe": {
@@ -351,27 +338,6 @@
     },
     "query": "\n            UPDATE transaction\n            SET\n                date = $3,\n                payee = $4,\n                notes = $5\n            WHERE id = $1 AND user_id = $2\n            RETURNING *\n            "
   },
-  "afc3c55c42244016261b681d3ad83b50a1fdac7ff40cbd377b03c9cb2481f10e": {
-    "describe": {
-      "columns": [
-        {
-          "name": "provided_address",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n        WITH pending_verification_emails AS (\n            SELECT email_id\n            FROM email_verification\n            WHERE token = $1 AND created_at > $2\n        )\n        UPDATE email\n        SET verified_at = now()\n        WHERE id = ANY(SELECT * FROM pending_verification_emails)\n        RETURNING provided_address\n        "
-  },
   "b2e3184b9de3bf24967b42f62004a9116837c4c0d5f4774f4947a1c876462f25": {
     "describe": {
       "columns": [],
@@ -462,6 +428,19 @@
     },
     "query": "\n            DELETE FROM transaction_entry\n            WHERE transaction_id = $1\n            "
   },
+  "d6f8e7326a4579e396675d83bbf5011beaba64af45bbd5c2b8a9ff6a278dd975": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO \"user\" (id, password)\n            VALUES ($1, $2)\n            "
+  },
   "e0ec74545d6912b117c4c20ad7edf61dbf9c37ce7ff8f253009c44d1e414a12f": {
     "describe": {
       "columns": [
@@ -520,6 +499,38 @@
       }
     },
     "query": "\n            INSERT INTO transaction (user_id, \"date\", payee, notes)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, user_id, date, payee, notes, created_at, updated_at\n            "
+  },
+  "ee18022cf2e065c72935f21be7899797b93dd694f8e56460d28cf9f81354c374": {
+    "describe": {
+      "columns": [
+        {
+          "name": "provided_address",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            WITH pending_verification_emails AS (\n                SELECT email_id\n                FROM email_verification\n                WHERE token = $1 AND created_at > (now() - INTERVAL '1 DAY')\n            )\n            UPDATE email\n            SET verified_at = now()\n            WHERE id = ANY(SELECT * FROM pending_verification_emails)\n            RETURNING provided_address\n            "
+  },
+  "f65168267e604c98861b9a16cee2411c2e0d63055d1e70d070daedf19d1b1922": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM email_verification\n            WHERE token = $1\n            "
   },
   "fe26d9547a9dcac20fe6d9508af002a7e83ad1dcad6645d63889cbae23492bd4": {
     "describe": {
