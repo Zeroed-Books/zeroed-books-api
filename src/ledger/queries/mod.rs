@@ -83,8 +83,6 @@ pub trait TransactionQueries {
         user_id: Uuid,
         transaction_id: Uuid,
     ) -> anyhow::Result<Option<domain::transactions::Transaction>>;
-
-    async fn list_transactions(&self, query: TransactionQuery) -> Result<TransactionCollection>;
 }
 
 #[derive(Default)]

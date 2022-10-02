@@ -15,6 +15,7 @@ use crate::{
     email::clients::{ConsoleMailer, EmailClient, SendgridMailer},
     identities::services::{EmailService, UserService},
     rate_limit::{RateLimiter, RedisRateLimiter},
+    repos::transactions::DynTransactionRepo,
 };
 
 pub struct Options {
@@ -68,6 +69,8 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let db_connection = PostgresConnection::new(db_pool.clone());
 
+    let transaction_repo: DynTransactionRepo = Arc::new(db_connection.clone());
+
     let email_service = EmailService::new(Arc::new(db_connection.clone()));
     let user_service = UserService::new(
         email_client.clone(),
@@ -102,7 +105,10 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
             "/identities",
             crate::identities::http::routes(state.clone()),
         )
-        .nest("/ledger", crate::ledger::http::routes(state.clone()))
+        .nest(
+            "/ledger",
+            crate::ledger::http::routes(state.clone(), transaction_repo),
+        )
         .layer(cors);
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
