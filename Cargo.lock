@@ -1779,9 +1779,9 @@ dependencies = [
 
 [[package]]
 name = "semval"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87399ce75dcd309d135741ee5b84814c19e8c68c5b944221a9617669d8b54929"
+checksum = "ff6c27810150862ca6567b77ef10516ef35174b17bb95f4cd1858d089d85835f"
 dependencies = [
  "smallvec",
 ]
@@ -2019,9 +2019,9 @@ checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
 
 [[package]]
 name = "smallvec"
-version = "1.8.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
+checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
 name = "socket2"
