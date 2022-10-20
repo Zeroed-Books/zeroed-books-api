@@ -1,15 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use sqlx::{FromRow, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{
-    database::PostgresConnection,
-    ledger::{
-        domain::transactions::{Transaction, TransactionCursor},
-        models,
-    },
+    database::PostgresConnection, ledger::domain::transactions::TransactionCursor, models,
 };
 
 /// Query parameters for listing transactions.
@@ -28,7 +24,7 @@ pub struct TransactionQuery {
 
 pub struct TransactionCollection {
     pub next: Option<TransactionCursor>,
-    pub items: Vec<Transaction>,
+    pub items: Vec<models::ledger::TransactionWithEntries>,
 }
 
 pub type DynTransactionRepo = Arc<dyn TransactionRepo + Send + Sync>;
@@ -107,12 +103,12 @@ impl TransactionRepo for PostgresConnection {
             // is a next page.
             .push_bind(i16::from(TRANSACTION_PAGE_SIZE) + 1);
 
-        let mut transactions_data: Vec<models::Transaction> = query_builder
+        let mut transactions_data: Vec<models::ledger::Transaction> = query_builder
             .build()
             .fetch_all(&**self)
             .await?
             .iter()
-            .map(models::Transaction::from_row)
+            .map(models::ledger::Transaction::from_row)
             .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
         // To figure out if there is a next page, we query one more element than
@@ -123,41 +119,52 @@ impl TransactionRepo for PostgresConnection {
             transactions_data.pop();
         }
 
-        let entries = sqlx::query_as::<_, models::FullTransactionEntry>(
+        let transaction_ids = transactions_data.iter().map(|t| t.id).collect::<Vec<_>>();
+
+        let entries = sqlx::query_as!(
+            models::ledger::TransactionEntry,
             r#"
-            SELECT e.*, a.*, c.*
+            SELECT *
             FROM transaction_entry e
-                LEFT JOIN account a ON e.account_id = a.id
-                LEFT JOIN currency c ON e.currency = c.code
-                LEFT JOIN transaction t ON e.transaction_id = t.id
-            ORDER BY t.id, e."order"
+            WHERE e.transaction_id = ANY($1)
+            ORDER BY e."order"
             "#,
+            &transaction_ids,
         )
         .fetch_all(&**self)
         .await?;
 
-        let mut entries_by_transaction: HashMap<Uuid, Vec<models::FullTransactionEntry>> =
-            HashMap::new();
-        for entry in entries {
-            entries_by_transaction
-                .entry(entry.entry.transaction_id)
-                .and_modify(|entries| entries.push(entry.clone()))
-                .or_insert_with(|| vec![entry]);
-        }
+        let account_ids = entries.iter().map(|e| e.account_id).collect::<Vec<_>>();
+        let accounts = sqlx::query_as!(
+            models::ledger::Account,
+            r#"
+            SELECT DISTINCT *
+            FROM account a
+            WHERE a.id = ANY($1)
+            "#,
+            &account_ids,
+        )
+        .fetch_all(&**self)
+        .await?;
 
-        let transactions = transactions_data
+        let currency_codes = entries
             .iter()
-            .map(|transaction| {
-                transaction.try_into_domain(
-                    entries_by_transaction
-                        .get(&transaction.id)
-                        .unwrap_or(&vec![]),
-                )
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .map(|e| e.currency.clone())
+            .collect::<Vec<_>>();
+        let currencies = sqlx::query_as!(
+            models::ledger::Currency,
+            r#"
+            SELECT DISTINCT *
+            FROM currency c
+            WHERE c.code = ANY($1)
+            "#,
+            &currency_codes,
+        )
+        .fetch_all(&**self)
+        .await?;
 
         let cursor = if has_next_page {
-            let last_transaction = &transactions[transactions.len() - 1];
+            let last_transaction = &transactions_data[transactions_data.len() - 1];
 
             Some(TransactionCursor {
                 after_date: last_transaction.date,
@@ -166,6 +173,13 @@ impl TransactionRepo for PostgresConnection {
         } else {
             None
         };
+
+        let transactions = models::ledger::TransactionWithEntries::zip_with_entries(
+            transactions_data,
+            entries,
+            currencies,
+            accounts,
+        )?;
 
         Ok(TransactionCollection {
             next: cursor,
