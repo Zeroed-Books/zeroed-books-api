@@ -1,3 +1,5 @@
+pub mod ledger;
+
 use std::convert::TryFrom;
 
 use crate::identities::domain::users::NewUser;

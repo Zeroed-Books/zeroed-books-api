@@ -26,6 +26,56 @@
     },
     "query": "\n            SELECT u.id, u.password AS password_hash\n            FROM \"email\" e\n            LEFT JOIN \"user\" u ON e.user_id = u.id\n            WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL\n            "
   },
+  "0b6d0b89045b92b0a6778fd1f1ff0c6655038f35e846d14573947ea9e74163e0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "transaction_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "order",
+          "ordinal": 2,
+          "type_info": "Int4"
+        },
+        {
+          "name": "account_id",
+          "ordinal": 3,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "currency",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "amount",
+          "ordinal": 5,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT *\n            FROM transaction_entry e\n            WHERE e.transaction_id = ANY($1)\n            ORDER BY e.\"order\"\n            "
+  },
   "0b82c36dbe20b5aeb4e4f795f5e0da1b27ce8b5d4ad9cb067ccadd005ca85ae0": {
     "describe": {
       "columns": [
@@ -227,6 +277,44 @@
     },
     "query": "\n            SELECT code, symbol, minor_units\n            FROM currency\n            WHERE code = $1\n            "
   },
+  "7685567ad67abcf7744774da3aa9ddfc4d7c0ef0c62842567ccde8effa681048": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "name",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT DISTINCT *\n            FROM account a\n            WHERE a.id = ANY($1)\n            "
+  },
   "974373028857aa523c743fb183c1ac4ae8a9f0aec8b88adf78e9c7bb4b9358cc": {
     "describe": {
       "columns": [],
@@ -350,6 +438,38 @@
       }
     },
     "query": "\n            UPDATE \"user\"\n            SET password = $2\n            WHERE id = $1\n            "
+  },
+  "b67c84f9ad9a920ddfd66e81cdb2359e2a0c3eef9ca616476293620f67fe399d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "code",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "symbol",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "minor_units",
+          "ordinal": 2,
+          "type_info": "Int2"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT DISTINCT *\n            FROM currency c\n            WHERE c.code = ANY($1)\n            "
   },
   "c407daf238ec2ea69e8831d10dea7777ae99ca2ff03c7bdd3b0b513d4848eb5f": {
     "describe": {
