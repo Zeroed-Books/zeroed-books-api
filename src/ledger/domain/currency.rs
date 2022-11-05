@@ -120,10 +120,17 @@ impl CurrencyAmount {
 
     pub fn format_value(&self) -> String {
         let amount_str = self.value.to_string();
-        let decimal_location = amount_str.len() - usize::from(self.currency.minor_units);
+        // We have to pad the value in order to ensure the string is long enough
+        // to insert the decimal point at the appropriate location.
+        let padded = format!(
+            "{:0>width$}",
+            amount_str,
+            width = usize::from(self.currency.minor_units) + 1
+        );
+        let decimal_location = padded.len() - usize::from(self.currency.minor_units);
 
-        let whole_part = &amount_str[..decimal_location];
-        let decimal_part = &amount_str[decimal_location..];
+        let whole_part = &padded[..decimal_location];
+        let decimal_part = &padded[decimal_location..];
 
         format!("{}.{}", whole_part, decimal_part)
     }
@@ -140,6 +147,39 @@ mod test {
             2 => Currency::new("USD".to_owned(), 2),
             units => Currency::new("XXM".to_owned(), units),
         }
+    }
+
+    #[test]
+    fn format_value_longer_than_padding() {
+        let currency = test_currency(2);
+        let amount = CurrencyAmount::from_minor(currency, 12345);
+        let want_formatted = "123.45";
+
+        let formatted = amount.format_value();
+
+        assert_eq!(want_formatted, formatted);
+    }
+
+    #[test]
+    fn format_value_with_only_tens_place() {
+        let currency = test_currency(2);
+        let amount = CurrencyAmount::from_minor(currency, 70);
+        let want_formatted = "0.70";
+
+        let formatted = amount.format_value();
+
+        assert_eq!(want_formatted, formatted);
+    }
+
+    #[test]
+    fn format_value_with_only_hundreds_place() {
+        let currency = test_currency(2);
+        let amount = CurrencyAmount::from_minor(currency, 7);
+        let want_formatted = "0.07";
+
+        let formatted = amount.format_value();
+
+        assert_eq!(want_formatted, formatted);
     }
 
     #[test]
@@ -308,6 +348,19 @@ mod test {
         let parsed_amount = currency
             .parse_amount(raw_amount)
             .expect("failed to parse negative decimal");
+
+        assert_eq!(want_amount, parsed_amount);
+    }
+
+    #[test]
+    fn parse_amount_hundreds_place_decimal() {
+        let currency = test_currency(2);
+        let raw_amount = ".07";
+        let want_amount = 7;
+
+        let parsed_amount = currency
+            .parse_amount(raw_amount)
+            .expect("failed to parse currency with only hundreds place decimal");
 
         assert_eq!(want_amount, parsed_amount);
     }
