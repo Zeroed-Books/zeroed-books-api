@@ -60,5 +60,5 @@ version = "0.18.1"
 features = ["async"]
 
 [dependencies.tera]
-version = "1.12.1"
+version = "1.17.1"
 default-features = false
