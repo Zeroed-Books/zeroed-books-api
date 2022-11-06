@@ -119,7 +119,11 @@ impl CurrencyAmount {
     }
 
     pub fn format_value(&self) -> String {
-        let amount_str = self.value.to_string();
+        // Preserve the sign, but then do string manipulation on the absolute
+        // value so we don't have to worry about a negative sign.
+        let sign = if self.value.is_negative() { "-" } else { "" };
+        let amount_str = self.value.abs().to_string();
+
         // We have to pad the value in order to ensure the string is long enough
         // to insert the decimal point at the appropriate location.
         let padded = format!(
@@ -132,7 +136,7 @@ impl CurrencyAmount {
         let whole_part = &padded[..decimal_location];
         let decimal_part = &padded[decimal_location..];
 
-        format!("{}.{}", whole_part, decimal_part)
+        format!("{}{}.{}", sign, whole_part, decimal_part)
     }
 }
 
@@ -176,6 +180,17 @@ mod test {
         let currency = test_currency(2);
         let amount = CurrencyAmount::from_minor(currency, 7);
         let want_formatted = "0.07";
+
+        let formatted = amount.format_value();
+
+        assert_eq!(want_formatted, formatted);
+    }
+
+    #[test]
+    fn format_negative_decimal() {
+        let currency = test_currency(2);
+        let amount = CurrencyAmount::from_minor(currency, -7);
+        let want_formatted = "-0.07";
 
         let formatted = amount.format_value();
 
