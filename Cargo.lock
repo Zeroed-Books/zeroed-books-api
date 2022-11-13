@@ -98,7 +98,7 @@ checksum = "25df3c03f1040d0069fcd3907e24e36d59f9b6fa07ba49be0eb25a794f036ba7"
 dependencies = [
  "base64ct",
  "blake2",
- "password-hash",
+ "password-hash 0.3.2",
 ]
 
 [[package]]
@@ -1398,6 +1398,17 @@ name = "password-hash"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d791538a6dcc1e7cb7fe6f6b58aca40e7f79403c45b2bc274008b5e647af1d8"
+dependencies = [
+ "base64ct",
+ "rand_core",
+ "subtle",
+]
+
+[[package]]
+name = "password-hash"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7676374caaee8a325c9e7a2ae557f216c5563a171d6997b0ef8a65af35147700"
 dependencies = [
  "base64ct",
  "rand_core",
@@ -3002,7 +3013,7 @@ dependencies = [
  "cookie",
  "forwarded-header-value",
  "hyper",
- "password-hash",
+ "password-hash 0.4.2",
  "rand",
  "rand_core",
  "redis",
