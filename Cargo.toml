@@ -14,20 +14,21 @@ path = "src/main.rs"
 anyhow = "1.0.56"
 argon2 = { version = "0.3.4", features = ["std"] }
 async-trait = "0.1.57"
-axum = { version = "0.6.0-rc.2"}
+axum = { version = "0.6.0-rc.2" }
 axum-extra = { version = "0.4.0-rc.1", features = ["cookie-private"] }
 base64 = "0.13.0"
 chrono = { version = "0.4.20", features = ["serde"] }
-clap = { version = "3.2.22", features = ["derive", "env"]}
+clap = { version = "4.0.19", features = ["derive", "env"] }
 cookie = { version = "0.16.0" }
 forwarded-header-value = { version = "0.1.1" }
 hyper = { version = "0.14.20" }
 password-hash = "0.3"
 rand = "0.8.5"
 rand_core = { version = "0.6", features = ["std"] }
-redis = "0.21.6"
+redis = "0.22.1"
 semval = "0.2"
-sentry = { version = "0.27.0", default-features = false, features = [
+sendgrid = { version = "0.18.1", features = ["async"] }
+sentry = { version = "0.28.0", default-features = false, features = [
     "anyhow",
     "backtrace",
     "contexts",
@@ -37,7 +38,7 @@ sentry = { version = "0.27.0", default-features = false, features = [
     "tracing",
     "transport",
 ] }
-sentry-tracing = { version = "0.27.0" }
+sentry-tracing = { version = "0.28.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlx = { version = "0.6.1", features = [
@@ -47,18 +48,11 @@ sqlx = { version = "0.6.1", features = [
     "runtime-tokio-rustls",
     "uuid",
 ] }
-thiserror = "1.0"
+tera = { version = "1.17.1", default_features = false }
+thiserror = { version = "1.0.37" }
 tower = { version = "0.4.13" }
 tracing = { version = "0.1.35" }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tokio = { version = "1.21.2", features = ["full"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 uuid = { version = "1.2.1", features = ["serde", "v4"] }
-
-[dependencies.sendgrid]
-version = "0.18.1"
-features = ["async"]
-
-[dependencies.tera]
-version = "1.17.1"
-default-features = false
