@@ -53,6 +53,6 @@ thiserror = { version = "1.0.37" }
 tower = { version = "0.4.13" }
 tracing = { version = "0.1.35" }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
-tokio = { version = "1.21.2", features = ["full"] }
+tokio = { version = "1.25.0", features = ["full"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 uuid = { version = "1.2.1", features = ["serde", "v4"] }
