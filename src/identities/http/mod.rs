@@ -33,7 +33,8 @@ use super::{
 pub mod reps;
 
 pub fn routes(app_state: AppState) -> Router<AppState> {
-    Router::with_state(app_state)
+    Router::new()
+        .with_state(app_state)
         .route("/email-verifications", post(verify_email))
         .route(
             "/password-reset-requests",

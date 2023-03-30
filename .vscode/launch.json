@@ -25,6 +25,8 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 "RUST_LOG": "info,zeroed_books_api=trace",
+                "JWT_AUDIENCE": "https://api.zeroedbooks.com/",
+                "JWT_AUTHORITY": "https://zeroed-books-dev.us.auth0.com",
                 // A stable secret key so cookie sessions stay valid across restarts.
                 // Generated with:
                 //   $ openssl rand -base64 50

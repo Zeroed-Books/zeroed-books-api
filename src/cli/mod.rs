@@ -71,6 +71,16 @@ struct ServeOpts {
     )]
     email_from_name: String,
 
+    /// The audience identifier for this application. Tokens must be issued
+    /// specifically for this audience in order for them to validate
+    /// successfully.
+    #[clap(long = "jwt-audience", env = "JWT_AUDIENCE")]
+    jwt_audience: String,
+
+    /// Authority used to validate JWTs
+    #[clap(long = "jwt-authority", env = "JWT_AUTHORITY")]
+    jwt_authority: String,
+
     /// Connection string for Redis.
     #[clap(long = "redis-url", env = "REDIS_URL")]
     redis_url: String,
@@ -98,6 +108,8 @@ impl From<ServeOpts> for server::Options {
             database_url: opts.database_url,
             email_from_address: opts.email_from_address,
             email_from_name: opts.email_from_name,
+            jwt_audience: opts.jwt_audience,
+            jwt_authority: opts.jwt_authority,
             redis_url: opts.redis_url,
             secret_key: opts.secret_key,
             sendgrid_key: opts.sendgrid_key,
