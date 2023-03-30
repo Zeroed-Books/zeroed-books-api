@@ -1,13 +1,12 @@
 use std::iter::FromIterator;
 
 use axum::{
-    extract::{FromRef, Path, Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
 };
-use axum_extra::extract::cookie::Key;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tracing::error;
@@ -17,7 +16,7 @@ use crate::{
     authentication::domain::session::{ExtractSession, Session},
     http_err::{ApiError, ApiResponse, ErrorRep},
     ledger::services::LedgerService,
-    repos::transactions::{DynTransactionRepo, TransactionQuery},
+    repos::transactions::TransactionQuery,
     server::AppState,
 };
 
@@ -29,38 +28,8 @@ use crate::ledger::{
 
 use super::reps;
 
-#[derive(Clone)]
-pub struct LedgerState {
-    app_state: AppState,
-    ledger_service: LedgerService,
-}
-
-impl FromRef<LedgerState> for Key {
-    fn from_ref(state: &LedgerState) -> Self {
-        Self::from_ref(&state.app_state)
-    }
-}
-
-impl FromRef<LedgerState> for PgPool {
-    fn from_ref(state: &LedgerState) -> Self {
-        Self::from_ref(&state.app_state)
-    }
-}
-
-impl FromRef<LedgerState> for LedgerService {
-    fn from_ref(state: &LedgerState) -> Self {
-        state.ledger_service.clone()
-    }
-}
-
-pub fn routes(app_state: AppState, transaction_repo: DynTransactionRepo) -> Router<LedgerState> {
-    let ledger_service = LedgerService::new(transaction_repo);
-    let ledger_state = LedgerState {
-        app_state,
-        ledger_service,
-    };
-
-    Router::with_state(ledger_state)
+pub fn routes() -> Router<AppState> {
+    Router::new()
         .route("/accounts", get(get_accounts))
         .route("/accounts/:account/balance", get(get_account_balance))
         .route(

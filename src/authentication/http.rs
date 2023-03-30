@@ -22,12 +22,14 @@ use crate::{
     server::AppState,
 };
 
-use super::{domain::session::Session, models::User};
+use super::{domain::session::Session, jwt::TokenClaims, models::User};
 
 pub fn routes(app_state: AppState) -> Router<AppState> {
-    Router::with_state(app_state)
+    Router::new()
+        .with_state(app_state)
         .route("/cookie-sessions", post(create_cookie_session))
         .route("/me", get(get_user_info))
+        .route("/new-me", get(get_jwt_info))
 }
 
 #[derive(Deserialize)]
@@ -133,4 +135,8 @@ async fn get_user_info(session: Session) -> Json<UserInfo> {
     Json(UserInfo {
         user_id: session.user_id(),
     })
+}
+
+async fn get_jwt_info(claims: TokenClaims) -> Json<TokenClaims> {
+    Json(claims)
 }
