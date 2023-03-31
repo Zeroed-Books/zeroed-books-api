@@ -75,7 +75,7 @@ impl TryFrom<&Currency> for domain::currency::Currency {
 }
 
 pub struct NewTransaction {
-    pub user_id: Uuid,
+    pub legacy_user_id: Uuid,
     pub date: NaiveDate,
     pub payee: String,
     pub notes: String,
@@ -84,7 +84,7 @@ pub struct NewTransaction {
 impl From<&domain::transactions::NewTransaction> for NewTransaction {
     fn from(transaction: &domain::transactions::NewTransaction) -> Self {
         Self {
-            user_id: transaction.user_id(),
+            legacy_user_id: transaction.user_id(),
             date: transaction.date(),
             payee: transaction.payee().to_owned(),
             notes: transaction.notes().unwrap_or("").to_owned(),
@@ -143,7 +143,8 @@ impl NewTransactionEntry {
 #[derive(Debug, sqlx::FromRow)]
 pub struct Transaction {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: Option<String>,
+    pub legacy_user_id: Option<Uuid>,
     pub date: NaiveDate,
     pub payee: String,
     pub notes: String,
@@ -158,7 +159,7 @@ impl Transaction {
     ) -> anyhow::Result<domain::transactions::Transaction> {
         Ok(domain::transactions::Transaction {
             id: self.id,
-            user_id: self.user_id,
+            user_id: self.legacy_user_id.unwrap(),
             date: self.date,
             payee: self.payee.clone(),
             notes: self.notes.clone(),
@@ -209,9 +210,9 @@ impl sqlx::FromRow<'_, PgRow> for FullTransactionEntry {
                 created_at: row.try_get(9)?,
             },
             currency: Currency {
-                code: row.try_get(10)?,
-                symbol: row.try_get(11)?,
-                minor_units: row.try_get(12)?,
+                code: row.try_get(11)?,
+                symbol: row.try_get(12)?,
+                minor_units: row.try_get(13)?,
             },
         })
     }

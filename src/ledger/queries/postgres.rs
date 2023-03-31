@@ -38,7 +38,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
                     JOIN account a ON a.id = e.account_id
                     JOIN transaction t ON t.id = e.transaction_id
             WHERE
-                t.user_id = $1
+                t.legacy_user_id = $1
                 AND
                     (a.name = $2 OR a.name LIKE $2 || ':%')
             GROUP BY e.currency
@@ -90,7 +90,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
             SELECT a.name
             FROM transaction_entry e
             LEFT JOIN account a ON e.account_id = a.id
-            WHERE a.user_id =
+            WHERE a.legacy_user_id =
             "#,
         );
         query_builder.push_bind(user_id);
@@ -159,7 +159,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             models::Transaction,
             r#"
             SELECT * FROM transaction
-            WHERE user_id = $1 AND id = $2
+            WHERE legacy_user_id = $1 AND id = $2
             "#,
             user_id,
             transaction_id

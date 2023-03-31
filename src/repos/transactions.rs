@@ -78,7 +78,7 @@ impl TransactionRepo for PostgresConnection {
                 r#"
                 SELECT t.*
                 FROM transaction t
-                WHERE t.user_id = "#,
+                WHERE t.legacy_user_id = "#,
             )
             .push_bind(query.user_id);
 
@@ -138,7 +138,7 @@ impl TransactionRepo for PostgresConnection {
         let accounts = sqlx::query_as!(
             models::ledger::Account,
             r#"
-            SELECT DISTINCT *
+            SELECT DISTINCT id, legacy_user_id, name, created_at
             FROM account a
             WHERE a.id = ANY($1)
             "#,

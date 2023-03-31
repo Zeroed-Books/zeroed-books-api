@@ -11,7 +11,18 @@ use tracing::debug;
 
 #[derive(Deserialize, Serialize)]
 pub struct TokenClaims {
+    iss: String,
     sub: String,
+}
+
+impl TokenClaims {
+    pub fn iss(&self) -> &str {
+        &self.iss
+    }
+
+    pub fn sub(&self) -> &str {
+        &self.sub
+    }
 }
 
 #[async_trait::async_trait]
