@@ -44,7 +44,13 @@ where
         let jwks = axum_jwks::Jwks::from_ref(state);
         let token = axum_jwks::Token::from_request_parts(parts, state)
             .await
-            .map_err(|_| JwtError::Missing)?;
+            .map_err(|_| {
+                debug!(
+                    "Cannot extract token claims from request due to missing authentication token."
+                );
+
+                JwtError::Missing
+            })?;
 
         let token_data = jwks.validate_claims(token.value()).map_err(|error| {
             debug!(?error, "Invalid authentication token received.");
