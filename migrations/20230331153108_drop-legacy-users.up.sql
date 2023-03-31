@@ -1,7 +1,7 @@
-DELETE FROM "account"
+DELETE FROM "transaction"
 WHERE user_id IS NULL;
 
-DELETE FROM "transaction"
+DELETE FROM "account"
 WHERE user_id IS NULL;
 
 ALTER TABLE "account"
