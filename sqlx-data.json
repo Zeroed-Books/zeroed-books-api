@@ -76,63 +76,6 @@
     },
     "query": "\n            SELECT *\n            FROM transaction_entry e\n            WHERE e.transaction_id = ANY($1)\n            ORDER BY e.\"order\"\n            "
   },
-  "0b82c36dbe20b5aeb4e4f795f5e0da1b27ce8b5d4ad9cb067ccadd005ca85ae0": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "user_id",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "date",
-          "ordinal": 2,
-          "type_info": "Date"
-        },
-        {
-          "name": "payee",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "notes",
-          "ordinal": 4,
-          "type_info": "Text"
-        },
-        {
-          "name": "created_at",
-          "ordinal": 5,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "updated_at",
-          "ordinal": 6,
-          "type_info": "Timestamptz"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid"
-        ]
-      }
-    },
-    "query": "\n            SELECT * FROM transaction\n            WHERE user_id = $1 AND id = $2\n            "
-  },
   "13d6667b60f168fca9d2a2a3c65c360e0d6ef994047d85c21463ab3052d35bcf": {
     "describe": {
       "columns": [],
@@ -230,6 +173,137 @@
     },
     "query": "\n            SELECT e.user_id\n            FROM \"email\" e\n            WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL\n            "
   },
+  "545a02df5f25f41db962f112d978a8ce7edf096d16cc881680cab30afb24d31a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "legacy_user_id",
+          "ordinal": 2,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "date",
+          "ordinal": 3,
+          "type_info": "Date"
+        },
+        {
+          "name": "payee",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "notes",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "ordinal": 7,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Date",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO transaction (legacy_user_id, \"date\", payee, notes)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, user_id, legacy_user_id, date, payee, notes, created_at, updated_at\n            "
+  },
+  "5725ebee7556c5756447b221c7f6401025fbaafea154acf0372e331df088f9dc": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "legacy_user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "date",
+          "ordinal": 2,
+          "type_info": "Date"
+        },
+        {
+          "name": "payee",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "notes",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 7,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid",
+          "Date",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            UPDATE transaction\n            SET\n                date = $3,\n                payee = $4,\n                notes = $5\n            WHERE id = $1 AND legacy_user_id = $2\n            RETURNING *\n            "
+  },
   "59987294c1d6df6810901d185473bfe857a7ebb717e52a89e35c231c22ecea06": {
     "describe": {
       "columns": [],
@@ -244,6 +318,89 @@
       }
     },
     "query": "\n            INSERT INTO email (id, user_id, provided_address, normalized_address)\n            VALUES ($1, $2, $3, $4)\n            "
+  },
+  "60f9a5a9ec184a47d55a94a54ba2949f3d8704c76654df29f270810676ebf21d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT e.user_id AS id\n        FROM email e\n        WHERE e.provided_address = $1 AND e.verified_at IS NOT NULL\n        "
+  },
+  "67c4fc0afbc7a05b8c750c901fda2aa54dda869864a648a2f7bb73c42bd881eb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "legacy_user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "date",
+          "ordinal": 2,
+          "type_info": "Date"
+        },
+        {
+          "name": "payee",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "notes",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "updated_at",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "user_id",
+          "ordinal": 7,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n            SELECT * FROM transaction\n            WHERE legacy_user_id = $1 AND id = $2\n            "
   },
   "72ec6e3f62afb88bdc8780146fbeab67551c0c34c48e143dd3c8f0d177f4316e": {
     "describe": {
@@ -277,44 +434,6 @@
     },
     "query": "\n            SELECT code, symbol, minor_units\n            FROM currency\n            WHERE code = $1\n            "
   },
-  "7685567ad67abcf7744774da3aa9ddfc4d7c0ef0c62842567ccde8effa681048": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "user_id",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "name",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "created_at",
-          "ordinal": 3,
-          "type_info": "Timestamptz"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "UuidArray"
-        ]
-      }
-    },
-    "query": "\n            SELECT DISTINCT *\n            FROM account a\n            WHERE a.id = ANY($1)\n            "
-  },
   "974373028857aa523c743fb183c1ac4ae8a9f0aec8b88adf78e9c7bb4b9358cc": {
     "describe": {
       "columns": [],
@@ -338,93 +457,6 @@
       }
     },
     "query": "\n                    DELETE FROM password_resets\n                    WHERE token = $1\n                    "
-  },
-  "9f38a1165d8e95cb4de0b808cf19b991cd4fc0768faef32c91d838a3e0a79fd6": {
-    "describe": {
-      "columns": [
-        {
-          "name": "currency",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "amount!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT e.\"currency\", COALESCE(SUM(e.\"amount\"), 0) AS \"amount!\"\n                FROM transaction_entry e\n                    JOIN account a ON a.id = e.account_id\n                    JOIN transaction t ON t.id = e.transaction_id\n            WHERE\n                t.user_id = $1\n                AND\n                    (a.name = $2 OR a.name LIKE $2 || ':%')\n            GROUP BY e.currency\n            ORDER BY e.currency\n            "
-  },
-  "a98c78d04d5b34ea2f9a5c0ec00dc81ccc774dce6006a53151771d01d6ca4800": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "user_id",
-          "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "date",
-          "ordinal": 2,
-          "type_info": "Date"
-        },
-        {
-          "name": "payee",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "notes",
-          "ordinal": 4,
-          "type_info": "Text"
-        },
-        {
-          "name": "created_at",
-          "ordinal": 5,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "updated_at",
-          "ordinal": 6,
-          "type_info": "Timestamptz"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Uuid",
-          "Date",
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            UPDATE transaction\n            SET\n                date = $3,\n                payee = $4,\n                notes = $5\n            WHERE id = $1 AND user_id = $2\n            RETURNING *\n            "
   },
   "b2e3184b9de3bf24967b42f62004a9116837c4c0d5f4774f4947a1c876462f25": {
     "describe": {
@@ -470,6 +502,32 @@
       }
     },
     "query": "\n            SELECT DISTINCT *\n            FROM currency c\n            WHERE c.code = ANY($1)\n            "
+  },
+  "bdcc2a47a10eed9693a4af60e4d7e221dbe21bbcc132a8a195a90d2328206e3b": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n        UPDATE account\n        SET user_id = $1\n        WHERE legacy_user_id = $2\n        "
+  },
+  "be336c8f1e17b413b374e16d21869da495e86e9c86ac78de7b15dfe396e27737": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n        UPDATE transaction\n        SET user_id = $1\n        WHERE legacy_user_id = $2\n        "
   },
   "c407daf238ec2ea69e8831d10dea7777ae99ca2ff03c7bdd3b0b513d4848eb5f": {
     "describe": {
@@ -548,6 +606,19 @@
     },
     "query": "\n            DELETE FROM transaction_entry\n            WHERE transaction_id = $1\n            "
   },
+  "d5cef6a4b006013f83e879145edfc7242bad4f4ed3330ea009e9544b9eeb4d9c": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM \"transaction\"\n            WHERE legacy_user_id = $1 AND id = $2\n            "
+  },
   "d6f8e7326a4579e396675d83bbf5011beaba64af45bbd5c2b8a9ff6a278dd975": {
     "describe": {
       "columns": [],
@@ -561,64 +632,32 @@
     },
     "query": "\n            INSERT INTO \"user\" (id, password)\n            VALUES ($1, $2)\n            "
   },
-  "e0ec74545d6912b117c4c20ad7edf61dbf9c37ce7ff8f253009c44d1e414a12f": {
+  "d85c1c5ebabe03618c3ba1c55ca369cabde5da51fa13c1e45b6f62135eb3feed": {
     "describe": {
       "columns": [
         {
-          "name": "id",
+          "name": "currency",
           "ordinal": 0,
-          "type_info": "Uuid"
+          "type_info": "Text"
         },
         {
-          "name": "user_id",
+          "name": "amount!",
           "ordinal": 1,
-          "type_info": "Uuid"
-        },
-        {
-          "name": "date",
-          "ordinal": 2,
-          "type_info": "Date"
-        },
-        {
-          "name": "payee",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "notes",
-          "ordinal": 4,
-          "type_info": "Text"
-        },
-        {
-          "name": "created_at",
-          "ordinal": 5,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "updated_at",
-          "ordinal": 6,
-          "type_info": "Timestamptz"
+          "type_info": "Int8"
         }
       ],
       "nullable": [
         false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false
+        null
       ],
       "parameters": {
         "Left": [
           "Uuid",
-          "Date",
-          "Text",
           "Text"
         ]
       }
     },
-    "query": "\n            INSERT INTO transaction (user_id, \"date\", payee, notes)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, user_id, date, payee, notes, created_at, updated_at\n            "
+    "query": "\n            SELECT e.\"currency\", COALESCE(SUM(e.\"amount\"), 0) AS \"amount!\"\n                FROM transaction_entry e\n                    JOIN account a ON a.id = e.account_id\n                    JOIN transaction t ON t.id = e.transaction_id\n            WHERE\n                t.legacy_user_id = $1\n                AND\n                    (a.name = $2 OR a.name LIKE $2 || ':%')\n            GROUP BY e.currency\n            ORDER BY e.currency\n            "
   },
   "ee18022cf2e065c72935f21be7899797b93dd694f8e56460d28cf9f81354c374": {
     "describe": {
@@ -684,17 +723,42 @@
     },
     "query": "\n            SELECT * FROM password_resets\n            WHERE token = $1\n            "
   },
-  "ffcb51b5c81fc78a8e46c4c6394725f88448bd20ac8871f8cc0f3d69e6ace222": {
+  "fe6386f197d2abce4bd8e76fc85b5ce921eccb5aadf19581a049586a1ea9bee8": {
     "describe": {
-      "columns": [],
-      "nullable": [],
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "legacy_user_id",
+          "ordinal": 1,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "name",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false
+      ],
       "parameters": {
         "Left": [
-          "Uuid",
-          "Uuid"
+          "UuidArray"
         ]
       }
     },
-    "query": "\n            DELETE FROM \"transaction\"\n            WHERE user_id = $1 AND id = $2\n            "
+    "query": "\n            SELECT DISTINCT id, legacy_user_id, name, created_at\n            FROM account a\n            WHERE a.id = ANY($1)\n            "
   }
 }
