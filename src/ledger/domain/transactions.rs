@@ -9,7 +9,7 @@ use super::currency::{Currency, CurrencyAmount};
 /// [`Self::new()`] which prevents construction of unbalanced transactions.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NewTransaction {
-    user_id: Uuid,
+    user_id: String,
     date: NaiveDate,
     payee: String,
     notes: Option<String>,
@@ -36,7 +36,7 @@ impl NewTransaction {
     ///   exactly one entry missing an amount, it will be automatically balanced
     ///   for the user.
     pub fn new(
-        user_id: Uuid,
+        user_id: String,
         date: NaiveDate,
         payee: String,
         notes: Option<String>,
@@ -104,8 +104,8 @@ impl NewTransaction {
         })
     }
 
-    pub fn user_id(&self) -> Uuid {
-        self.user_id
+    pub fn user_id(&self) -> &str {
+        &self.user_id
     }
 
     pub fn date(&self) -> NaiveDate {
@@ -132,7 +132,7 @@ pub struct NewTransactionEntry {
 
 pub struct Transaction {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: String,
     pub date: NaiveDate,
     pub payee: String,
     pub notes: String,
@@ -185,8 +185,8 @@ mod test {
     #[test]
     fn new_empty_transaction() {
         let _transaction = NewTransaction::new(
-            Uuid::new_v4(),
-            NaiveDate::from_ymd(2022, 1, 16),
+            "some-user-id".to_owned(),
+            NaiveDate::from_ymd_opt(2022, 1, 16).unwrap(),
             "Groceries".to_string(),
             None,
             vec![],
@@ -195,8 +195,8 @@ mod test {
 
     #[test]
     fn new_balanced_transaction_single_currency() {
-        let user_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd(2022, 1, 16);
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
         let payee = "Gas".to_string();
         let notes = None;
 
@@ -223,8 +223,8 @@ mod test {
 
     #[test]
     fn new_auto_balanced_transaction_single_currency() {
-        let user_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd(2022, 1, 16);
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
         let payee = "Gas".to_string();
         let notes = None;
 
@@ -251,8 +251,8 @@ mod test {
 
     #[test]
     fn new_unbalanced_transaction_single_currency() {
-        let user_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd(2022, 1, 16);
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
         let payee = "Gas".to_string();
         let notes = None;
 
@@ -277,8 +277,8 @@ mod test {
 
     #[test]
     fn new_balanced_transaction_multi_currency() {
-        let user_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd(2022, 1, 16);
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
         let payee = "Exxon".to_string();
         let notes = None;
 
@@ -315,8 +315,8 @@ mod test {
 
     #[test]
     fn new_autobalanced_transaction_multi_currency() {
-        let user_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd(2022, 1, 16);
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
         let payee = "Exxon".to_string();
         let notes = None;
 
@@ -353,8 +353,8 @@ mod test {
 
     #[test]
     fn new_unbalanced_transaction_multi_currency() {
-        let user_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd(2022, 1, 16);
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
         let payee = "Exxon".to_string();
         let notes = None;
 

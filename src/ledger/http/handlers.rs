@@ -13,7 +13,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    authentication::domain::session::{ExtractSession, Session},
+    authentication::TokenClaims,
     http_err::{ApiError, ApiResponse, ErrorRep},
     ledger::services::LedgerService,
     repos::transactions::TransactionQuery,
@@ -45,14 +45,14 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn delete_transaction(
-    session: Session,
+    claims: TokenClaims,
     State(db): State<PgPool>,
     Path(transaction_id): Path<Uuid>,
 ) -> ApiResponse<StatusCode> {
     let commands = PostgresCommands(&db);
 
     match commands
-        .delete_transaction(session.user_id(), transaction_id)
+        .delete_transaction(claims.user_id(), transaction_id)
         .await
     {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
@@ -65,14 +65,14 @@ async fn delete_transaction(
 }
 
 async fn get_account_balance(
+    claims: TokenClaims,
     State(db): State<PgPool>,
-    ExtractSession(session): ExtractSession,
     Path(account): Path<String>,
 ) -> ApiResponse<Json<Vec<reps::CurrencyAmount>>> {
     let queries = PostgresQueries(&db);
 
     match queries
-        .get_account_balance(session.user_id(), account.to_owned())
+        .get_account_balance(claims.user_id(), account.to_owned())
         .await
     {
         Ok(balances) => Ok(Json(
@@ -92,14 +92,14 @@ struct GetAccountsParams {
 }
 
 async fn get_accounts(
+    claims: TokenClaims,
     State(db): State<PgPool>,
-    session: Session,
     Query(query): Query<GetAccountsParams>,
 ) -> ApiResponse<Json<Vec<String>>> {
     let queries = PostgresQueries(&db);
 
     match queries
-        .list_accounts_by_popularity(session.user_id(), query.query)
+        .list_accounts_by_popularity(claims.user_id(), query.query)
         .await
     {
         Ok(accounts) => Ok(Json(accounts)),
@@ -137,14 +137,14 @@ impl From<Option<domain::transactions::Transaction>> for GetTransactionResponse 
 }
 
 async fn get_transaction(
-    session: Session,
+    claims: TokenClaims,
     State(db): State<PgPool>,
     Path(transaction_id): Path<Uuid>,
 ) -> Result<GetTransactionResponse, ApiError> {
     let queries = PostgresQueries(&db);
 
     match queries
-        .get_transaction(session.user_id(), transaction_id)
+        .get_transaction(claims.user_id(), transaction_id)
         .await
     {
         Ok(transaction) => Ok(transaction.into()),
@@ -163,13 +163,13 @@ struct GetTransactionsParams {
 }
 
 async fn get_transactions(
-    session: Session,
+    claims: TokenClaims,
     State(ledger_service): State<LedgerService>,
     Query(GetTransactionsParams { account, after }): Query<GetTransactionsParams>,
 ) -> ApiResponse<Json<reps::ResourceCollection<reps::Transaction, reps::EncodedTransactionCursor>>>
 {
     let query = TransactionQuery {
-        user_id: session.user_id(),
+        user_id: claims.user_id().to_owned(),
         after: after.as_ref().map(|c| (&c.0).into()),
         account: account.map(String::from),
     };
@@ -217,7 +217,7 @@ impl From<reps::TransactionValidationError> for CreateTransactionResponse {
 }
 
 async fn create_transaction(
-    session: Session,
+    claims: TokenClaims,
     State(db): State<PgPool>,
     Json(new_transaction): Json<reps::NewTransaction>,
 ) -> ApiResponse<CreateTransactionResponse> {
@@ -233,10 +233,11 @@ async fn create_transaction(
         }
     };
 
-    let transaction = match new_transaction.try_into_domain(session.user_id(), used_currencies) {
-        Ok(t) => t,
-        Err(error) => return Ok(error.into()),
-    };
+    let transaction =
+        match new_transaction.try_into_domain(claims.user_id().to_owned(), used_currencies) {
+            Ok(t) => t,
+            Err(error) => return Ok(error.into()),
+        };
 
     let ledger_commands = PostgresCommands(&db);
 
@@ -281,7 +282,7 @@ impl From<reps::TransactionValidationError> for UpdateTransactionResponse {
 }
 
 async fn update_transaction(
-    session: Session,
+    claims: TokenClaims,
     State(db): State<PgPool>,
     Path(transaction_id): Path<Uuid>,
     Json(updated_transaction): Json<reps::NewTransaction>,
@@ -298,11 +299,11 @@ async fn update_transaction(
         }
     };
 
-    let transaction = match updated_transaction.try_into_domain(session.user_id(), used_currencies)
-    {
-        Ok(t) => t,
-        Err(error) => return Ok(error.into()),
-    };
+    let transaction =
+        match updated_transaction.try_into_domain(claims.user_id().to_owned(), used_currencies) {
+            Ok(t) => t,
+            Err(error) => return Ok(error.into()),
+        };
 
     let ledger_commands = PostgresCommands(&db);
 

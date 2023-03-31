@@ -25,7 +25,7 @@ struct CurrencyBalance {
 impl<'a> AccountQueries for PostgresQueries<'a> {
     async fn get_account_balance(
         &self,
-        user_id: Uuid,
+        user_id: &str,
         account_name: String,
     ) -> Result<Vec<domain::currency::CurrencyAmount>> {
         trace!(account = %account_name, "Fetching account balance.");
@@ -38,7 +38,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
                     JOIN account a ON a.id = e.account_id
                     JOIN transaction t ON t.id = e.transaction_id
             WHERE
-                t.legacy_user_id = $1
+                t.user_id = $1
                 AND
                     (a.name = $2 OR a.name LIKE $2 || ':%')
             GROUP BY e.currency
@@ -82,7 +82,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
 
     async fn list_accounts_by_popularity(
         &self,
-        user_id: Uuid,
+        user_id: &str,
         search: Option<String>,
     ) -> Result<Vec<String>> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
@@ -90,7 +90,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
             SELECT a.name
             FROM transaction_entry e
             LEFT JOIN account a ON e.account_id = a.id
-            WHERE a.legacy_user_id =
+            WHERE a.user_id =
             "#,
         );
         query_builder.push_bind(user_id);
@@ -150,7 +150,7 @@ impl<'a> CurrencyQueries for PostgresQueries<'a> {
 impl<'a> TransactionQueries for PostgresQueries<'a> {
     async fn get_transaction(
         &self,
-        user_id: Uuid,
+        user_id: &str,
         transaction_id: Uuid,
     ) -> Result<Option<domain::transactions::Transaction>> {
         trace!(%user_id, %transaction_id, "Querying for transaction by ID.");
@@ -158,8 +158,9 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
         let transaction_result = sqlx::query_as!(
             models::Transaction,
             r#"
-            SELECT * FROM transaction
-            WHERE legacy_user_id = $1 AND id = $2
+            SELECT id, user_id, date, payee, notes, created_at, updated_at
+            FROM transaction
+            WHERE user_id = $1 AND id = $2
             "#,
             user_id,
             transaction_id

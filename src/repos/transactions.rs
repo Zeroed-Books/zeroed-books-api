@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sqlx::{FromRow, Postgres, QueryBuilder};
-use uuid::Uuid;
 
 use crate::{
     database::PostgresConnection, ledger::domain::transactions::TransactionCursor, models,
@@ -12,7 +11,7 @@ use crate::{
 #[derive(Default)]
 pub struct TransactionQuery {
     /// The owner of the transactions to search for.
-    pub user_id: Uuid,
+    pub user_id: String,
     /// An optional cursor into the transaction list indicating that only
     /// results occurring after the specified position in the list should be
     /// returned.
@@ -78,7 +77,7 @@ impl TransactionRepo for PostgresConnection {
                 r#"
                 SELECT t.*
                 FROM transaction t
-                WHERE t.legacy_user_id = "#,
+                WHERE t.user_id = "#,
             )
             .push_bind(query.user_id);
 
@@ -138,7 +137,7 @@ impl TransactionRepo for PostgresConnection {
         let accounts = sqlx::query_as!(
             models::ledger::Account,
             r#"
-            SELECT DISTINCT id, legacy_user_id, name, created_at
+            SELECT DISTINCT id, user_id, name, created_at
             FROM account a
             WHERE a.id = ANY($1)
             "#,

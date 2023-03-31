@@ -15,11 +15,11 @@ pub struct PostgresCommands<'a>(pub &'a PgPool);
 
 #[async_trait]
 impl<'a> TransactionCommands for PostgresCommands<'a> {
-    async fn delete_transaction(&self, owner_id: Uuid, transaction_id: Uuid) -> anyhow::Result<()> {
+    async fn delete_transaction(&self, owner_id: &str, transaction_id: Uuid) -> anyhow::Result<()> {
         Ok(sqlx::query!(
             r#"
             DELETE FROM "transaction"
-            WHERE legacy_user_id = $1 AND id = $2
+            WHERE user_id = $1 AND id = $2
             "#,
             owner_id,
             transaction_id,
@@ -42,11 +42,11 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
         let persisted_transaction = sqlx::query_as!(
             models::Transaction,
             r#"
-            INSERT INTO transaction (legacy_user_id, "date", payee, notes)
+            INSERT INTO transaction (user_id, "date", payee, notes)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, user_id, legacy_user_id, date, payee, notes, created_at, updated_at
+            RETURNING id, user_id, date, payee, notes, created_at, updated_at
             "#,
-            transaction_model.legacy_user_id,
+            transaction_model.user_id,
             transaction_model.date,
             transaction_model.payee,
             transaction_model.notes,
@@ -56,7 +56,7 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
 
         let entry_models = models::NewTransactionEntry::from_domain_entries(
             persisted_transaction.id,
-            transaction.user_id(),
+            transaction.user_id().to_owned(),
             transaction.entries(),
         )
         .context("Failed to map transaction entries to model.")?;
@@ -69,7 +69,7 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
             b.push_bind(entry.transaction_id)
                 .push_bind(entry.order)
                 .push("get_or_create_account(")
-                .push_bind_unseparated(transaction_model.legacy_user_id)
+                .push_bind_unseparated(&transaction_model.user_id)
                 .push_bind(entry.account.name)
                 .push_unseparated(")")
                 .push_bind(entry.currency)
@@ -105,7 +105,7 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
         let transaction_changeset = models::NewTransaction::from(&update);
         let transaction_entries = models::NewTransactionEntry::from_domain_entries(
             transaction_id,
-            transaction_changeset.legacy_user_id,
+            transaction_changeset.user_id.clone(),
             update.entries(),
         )
         .context("Failed to convert domain entries to model.")?;
@@ -120,11 +120,11 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
                 date = $3,
                 payee = $4,
                 notes = $5
-            WHERE id = $1 AND legacy_user_id = $2
-            RETURNING *
+            WHERE id = $1 AND user_id = $2
+            RETURNING id, user_id, date, payee, notes, created_at, updated_at
             "#,
             transaction_id,
-            transaction_changeset.legacy_user_id,
+            &transaction_changeset.user_id,
             transaction_changeset.date,
             transaction_changeset.payee,
             transaction_changeset.notes
@@ -151,7 +151,7 @@ impl<'a> TransactionCommands for PostgresCommands<'a> {
             b.push_bind(entry.transaction_id)
                 .push_bind(entry.order)
                 .push("get_or_create_account(")
-                .push_bind_unseparated(transaction_changeset.legacy_user_id)
+                .push_bind_unseparated(&transaction_changeset.user_id)
                 .push_bind(entry.account.name)
                 .push(")")
                 .push_bind(entry.currency)

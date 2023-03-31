@@ -19,7 +19,7 @@ pub trait TransactionCommands {
     /// A [`Result`][anyhow::Result] containing either an empty success value,
     /// or an error that occurred. Attempting to delete a transaction that does
     /// not exist is not an error.
-    async fn delete_transaction(&self, user_id: Uuid, transaction_id: Uuid) -> anyhow::Result<()>;
+    async fn delete_transaction(&self, user_id: &str, transaction_id: Uuid) -> anyhow::Result<()>;
 
     /// Persist a new transaction.
     ///

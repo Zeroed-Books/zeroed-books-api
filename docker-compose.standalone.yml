@@ -6,8 +6,6 @@ services:
 
         environment:
             DATABASE_URL: postgres://postgres:password@postgres/postgres
-            # Make rocket available outside the container.
-            ROCKET_ADDRESS: "0.0.0.0"
 
         ports:
             - 8000:8000

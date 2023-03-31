@@ -29,7 +29,7 @@ pub trait AccountQueries {
     /// the specified account.
     async fn get_account_balance(
         &self,
-        user_id: Uuid,
+        user_id: &str,
         account_name: String,
     ) -> Result<Vec<CurrencyAmount>>;
 
@@ -48,7 +48,7 @@ pub trait AccountQueries {
     /// associated with them.
     async fn list_accounts_by_popularity(
         &self,
-        user_id: Uuid,
+        user_id: &str,
         search_string: Option<String>,
     ) -> Result<Vec<String>>;
 }
@@ -80,14 +80,14 @@ pub trait TransactionQueries {
     /// A [`Result`][anyhow::Result] containing the transaction if it was found.
     async fn get_transaction(
         &self,
-        user_id: Uuid,
+        user_id: &str,
         transaction_id: Uuid,
     ) -> anyhow::Result<Option<domain::transactions::Transaction>>;
 }
 
 #[derive(Default)]
 pub struct TransactionQuery {
-    pub user_id: Uuid,
+    pub user_id: String,
     pub after: Option<domain::transactions::TransactionCursor>,
     pub account: Option<String>,
 }

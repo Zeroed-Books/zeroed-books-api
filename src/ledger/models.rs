@@ -75,7 +75,7 @@ impl TryFrom<&Currency> for domain::currency::Currency {
 }
 
 pub struct NewTransaction {
-    pub legacy_user_id: Uuid,
+    pub user_id: String,
     pub date: NaiveDate,
     pub payee: String,
     pub notes: String,
@@ -84,7 +84,7 @@ pub struct NewTransaction {
 impl From<&domain::transactions::NewTransaction> for NewTransaction {
     fn from(transaction: &domain::transactions::NewTransaction) -> Self {
         Self {
-            legacy_user_id: transaction.user_id(),
+            user_id: transaction.user_id().to_owned(),
             date: transaction.date(),
             payee: transaction.payee().to_owned(),
             notes: transaction.notes().unwrap_or("").to_owned(),
@@ -104,21 +104,21 @@ pub struct NewTransactionEntry {
 #[derive(Clone, Debug)]
 pub struct Account {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug)]
 pub struct AccountByName {
-    pub user_id: Uuid,
+    pub user_id: String,
     pub name: String,
 }
 
 impl NewTransactionEntry {
     pub fn from_domain_entries(
         transaction_id: Uuid,
-        user_id: Uuid,
+        user_id: String,
         entries: &[domain::transactions::TransactionEntry],
     ) -> anyhow::Result<Vec<Self>> {
         entries
@@ -129,7 +129,7 @@ impl NewTransactionEntry {
                     transaction_id,
                     order: index.try_into()?,
                     account: AccountByName {
-                        user_id,
+                        user_id: user_id.clone(),
                         name: entry.account().to_owned(),
                     },
                     currency: entry.amount().currency().code().to_owned(),
@@ -143,8 +143,7 @@ impl NewTransactionEntry {
 #[derive(Debug, sqlx::FromRow)]
 pub struct Transaction {
     pub id: Uuid,
-    pub user_id: Option<String>,
-    pub legacy_user_id: Option<Uuid>,
+    pub user_id: String,
     pub date: NaiveDate,
     pub payee: String,
     pub notes: String,
@@ -159,7 +158,7 @@ impl Transaction {
     ) -> anyhow::Result<domain::transactions::Transaction> {
         Ok(domain::transactions::Transaction {
             id: self.id,
-            user_id: self.legacy_user_id.unwrap(),
+            user_id: self.user_id.clone(),
             date: self.date,
             payee: self.payee.clone(),
             notes: self.notes.clone(),
@@ -205,14 +204,14 @@ impl sqlx::FromRow<'_, PgRow> for FullTransactionEntry {
             },
             account: Account {
                 id: row.try_get(6)?,
-                user_id: row.try_get(7)?,
-                name: row.try_get(8)?,
-                created_at: row.try_get(9)?,
+                user_id: row.try_get(9)?,
+                name: row.try_get(7)?,
+                created_at: row.try_get(8)?,
             },
             currency: Currency {
-                code: row.try_get(11)?,
-                symbol: row.try_get(12)?,
-                minor_units: row.try_get(13)?,
+                code: row.try_get(10)?,
+                symbol: row.try_get(11)?,
+                minor_units: row.try_get(12)?,
             },
         })
     }
