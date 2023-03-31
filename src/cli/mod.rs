@@ -55,22 +55,6 @@ struct ServeOpts {
     #[clap(long = "database-url", env = "DATABASE_URL")]
     database_url: String,
 
-    /// Address to send emails from.
-    #[clap(
-        long = "email-from-address",
-        default_value = "admin@localhost",
-        env = "EMAIL_FROM_ADDRESS"
-    )]
-    email_from_address: String,
-
-    /// Display name to send emails from.
-    #[clap(
-        long = "email-from-name",
-        default_value = "Zeroed Books",
-        env = "EMAIL_FROM_NAME"
-    )]
-    email_from_name: String,
-
     /// The audience identifier for this application. Tokens must be issued
     /// specifically for this audience in order for them to validate
     /// successfully.
@@ -80,24 +64,6 @@ struct ServeOpts {
     /// Authority used to validate JWTs
     #[clap(long = "jwt-authority", env = "JWT_AUTHORITY")]
     jwt_authority: String,
-
-    /// Connection string for Redis.
-    #[clap(long = "redis-url", env = "REDIS_URL")]
-    redis_url: String,
-
-    /// Secret key for signing application data.
-    ///
-    /// If this is changed, existing session cookies will become invalid.
-    /// Generate with: openssl rand -base64 32
-    #[clap(long = "secret-key", env = "SECRET_KEY")]
-    secret_key: String,
-
-    /// API key for SendGrid.
-    ///
-    /// If provided, emails will be sent using SendGrid. If this is not set,
-    /// emails will be printed to stdout.
-    #[clap(long = "sendgrid-key", env = "SENDGRID_KEY")]
-    sendgrid_key: Option<String>,
 }
 
 impl From<ServeOpts> for server::Options {
@@ -106,13 +72,8 @@ impl From<ServeOpts> for server::Options {
             database_pool_size: opts.database_pool_size,
             database_timeout_seconds: opts.database_timeout,
             database_url: opts.database_url,
-            email_from_address: opts.email_from_address,
-            email_from_name: opts.email_from_name,
             jwt_audience: opts.jwt_audience,
             jwt_authority: opts.jwt_authority,
-            redis_url: opts.redis_url,
-            secret_key: opts.secret_key,
-            sendgrid_key: opts.sendgrid_key,
         }
     }
 }

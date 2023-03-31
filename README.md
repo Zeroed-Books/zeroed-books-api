@@ -25,24 +25,18 @@ zeroed-books-api help
 
 ### Environment Variables
 
+These attributes are commonly provided through environment variables rather than
+as CLI flags:
+
 **`DATABASE_URL`:** The connection string used to connect to the primary
 Postgres database.
 
-**`REDIS_URL`:** Connection string used to connect to Redis. Redis is
-used as the backing store for rate limiting.
+**`JWT_AUDIENCE`:** The identifier for the application that will be used to
+verify that JWTs are intended for consumption by the application.
 
-**`SECRET_KEY`:** A secret key used primarily to encrypt private cookies. This
-can be generated with: `openssl rand -base64 32`.
-
-**`SENDGRID_KEY`:** An API token for Sendgrid. If this is provided,
-transactional emails will be sent using Sendgrid. If this is left empty, the
-default development setting of logging emails to the console is used.
+**`JWT_AUTHORITY`:** The accepted issuer for JWTs.
 
 ## Deployment
-
-If the application is running behind a proxy, ensure that the proxy populates
-the `X-Real-IP` header for the request. If this is not done, all requests will
-originate from the same IP resulting in frequent rate limiting.
 
 The database must have the `uuid-ossp` extension enabled:
 

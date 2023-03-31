@@ -12,7 +12,7 @@ use crate::ledger::domain;
 #[derive(Clone, Debug)]
 pub struct Account {
     pub id: Uuid,
-    pub legacy_user_id: Option<Uuid>,
+    pub user_id: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }
@@ -29,7 +29,6 @@ pub struct Currency {
 pub struct Transaction {
     pub id: Uuid,
     pub user_id: Option<String>,
-    pub legacy_user_id: Uuid,
     pub date: NaiveDate,
     pub payee: String,
     pub notes: String,
@@ -164,7 +163,7 @@ impl TryFrom<TransactionWithEntries> for domain::transactions::Transaction {
 
         Ok(Self {
             id: model.transaction.id,
-            user_id: model.transaction.legacy_user_id,
+            user_id: model.transaction.user_id.unwrap(),
             date: model.transaction.date,
             payee: model.transaction.payee,
             notes: model.transaction.notes,

@@ -42,7 +42,7 @@ pub struct NewTransaction {
 impl NewTransaction {
     pub fn try_into_domain(
         &self,
-        user_id: Uuid,
+        user_id: String,
         currencies: HashMap<String, domain::currency::Currency>,
     ) -> Result<domain::transactions::NewTransaction, TransactionValidationError> {
         let mut parsed_entries = Vec::with_capacity(self.entries.len());

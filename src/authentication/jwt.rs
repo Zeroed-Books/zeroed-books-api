@@ -23,6 +23,13 @@ impl TokenClaims {
     pub fn sub(&self) -> &str {
         &self.sub
     }
+
+    /// Get the ID of the user that the token claims represent.
+    ///
+    /// This is the user who made the request.
+    pub fn user_id(&self) -> &str {
+        &self.sub
+    }
 }
 
 #[async_trait::async_trait]
