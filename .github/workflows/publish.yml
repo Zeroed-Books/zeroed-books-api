@@ -10,9 +10,18 @@ env:
   IMAGE_NAME: api
 
 jobs:
+  database:
+    uses: ./.github/workflows/database.yml
+  rust:
+    uses: ./.github/workflows/rust.yml
+
   # Push image to GitHub Packages.
   # See also https://docs.docker.com/docker-hub/builds/
   push:
+    needs:
+      - database
+      - rust
+
     runs-on: ubuntu-latest
     permissions:
       packages: write

@@ -1,10 +1,8 @@
-name: Run Tests
+name: Database Checks
 
 on:
-  push:
-    branches:
-      - main
-  pull_request: null
+  pull_request:
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,7 +38,9 @@ jobs:
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@v1
+      # Since we use the `sqlx` CLI, we want to separate this cache from the
+      # others, so we don't sepcify a `shared-key`.
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install sqlx-cli
         run: cargo install sqlx-cli --no-default-features --features native-tls,postgres
@@ -50,21 +50,3 @@ jobs:
 
       - name: Verify query data
         run: cargo sqlx prepare --check
-
-      - name: Verify formatting
-        run: cargo fmt --all -- --check
-
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: -- -D warnings
-
-      - name: Build
-        run: cargo build --verbose
-        env:
-          SQLX_OFFLINE: "true"
-
-      - name: Run tests
-        run: cargo test --verbose
-        env:
-          SQLX_OFFLINE: "true"
