@@ -1,13 +1,7 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use axum::{
-    extract::FromRef,
-    http::{header, Method},
-    Router,
-};
+use axum::{extract::FromRef, Router};
 use sqlx::{postgres::PgPoolOptions, PgPool};
-
-use tower_http::cors::{self, CorsLayer};
 
 use crate::{
     database::PostgresConnection, ledger::services::LedgerService,
@@ -45,12 +39,6 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let ledger_service = LedgerService::new(transaction_repo);
 
-    let cors = CorsLayer::new()
-        .allow_credentials(true)
-        .allow_headers([header::CONTENT_TYPE])
-        .allow_methods([Method::DELETE, Method::GET, Method::POST, Method::PUT])
-        .allow_origin(cors::AllowOrigin::mirror_request());
-
     let state = AppState {
         db: db_pool,
         jwks,
@@ -59,11 +47,10 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let app = Router::new()
         .nest("/ledger", crate::ledger::http::routes())
-        .with_state(state)
-        .layer(cors);
+        .with_state(state);
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+        .serve(app.into_make_service())
         .await?;
 
     Ok(())
