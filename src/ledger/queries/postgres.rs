@@ -2,17 +2,20 @@ use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{Postgres, QueryBuilder, Row};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
-use crate::ledger::{domain, models};
+use crate::{
+    database::PostgresConnection,
+    ledger::{domain, models},
+};
 
 use super::{AccountQueries, CurrencyQueries, TransactionQueries};
 
 /// A struct to provide queries for the Postgres database backing the
 /// application.
-pub struct PostgresQueries<'a>(pub &'a PgPool);
+pub struct PostgresQueries(pub PostgresConnection);
 
 #[derive(sqlx::FromRow)]
 struct CurrencyBalance {
@@ -22,7 +25,7 @@ struct CurrencyBalance {
 }
 
 #[async_trait]
-impl<'a> AccountQueries for PostgresQueries<'a> {
+impl AccountQueries for PostgresQueries {
     async fn get_account_balance(
         &self,
         user_id: &str,
@@ -47,7 +50,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
             user_id,
             &account_name
         )
-        .fetch_all(self.0)
+        .fetch_all(&*self.0)
         .await?;
 
         let currency_codes = amounts
@@ -64,7 +67,7 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
             "#,
             &currency_codes
         )
-        .fetch_all(self.0)
+        .fetch_all(&*self.0)
         .await?;
 
         let balances = currencies.drain(..).zip(amounts).collect::<Vec<_>>();
@@ -112,16 +115,37 @@ impl<'a> AccountQueries for PostgresQueries<'a> {
 
         Ok(query_builder
             .build()
-            .fetch_all(self.0)
+            .fetch_all(&*self.0)
             .await?
             .iter()
             .map(|row| row.try_get(0))
             .collect::<Result<Vec<_>, sqlx::Error>>()?)
     }
+
+    async fn list_active_accounts(&self, user_id: &str) -> Result<Vec<String>> {
+        let accounts = sqlx::query!(
+            r#"
+            SELECT DISTINCT a.name
+            FROM transaction_entry e
+                LEFT JOIN account a ON a.id = e.account_id
+                LEFT JOIN transaction t ON t.id = e.transaction_id
+            WHERE a.user_id = $1
+                AND t.created_at >= now() - INTERVAL '1 year'
+            "#,
+            user_id
+        )
+        .fetch_all(&*self.0)
+        .await?
+        .drain(..)
+        .map(|record| record.name)
+        .collect::<Vec<_>>();
+
+        Ok(accounts)
+    }
 }
 
 #[async_trait]
-impl<'a> CurrencyQueries for PostgresQueries<'a> {
+impl CurrencyQueries for PostgresQueries {
     async fn get_currencies_by_code(
         &self,
         currency_codes: Vec<String>,
@@ -134,7 +158,7 @@ impl<'a> CurrencyQueries for PostgresQueries<'a> {
             "#,
             &currency_codes
         )
-        .fetch_all(self.0)
+        .fetch_all(&*self.0)
         .await?;
 
         let mut currency_map = HashMap::with_capacity(currency_models.len());
@@ -147,7 +171,7 @@ impl<'a> CurrencyQueries for PostgresQueries<'a> {
 }
 
 #[async_trait]
-impl<'a> TransactionQueries for PostgresQueries<'a> {
+impl TransactionQueries for PostgresQueries {
     async fn get_transaction(
         &self,
         user_id: &str,
@@ -165,7 +189,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             user_id,
             transaction_id
         )
-        .fetch_optional(self.0)
+        .fetch_optional(&*self.0)
         .await?;
 
         let transaction = match transaction_result {
@@ -188,7 +212,7 @@ impl<'a> TransactionQueries for PostgresQueries<'a> {
             "#,
         )
         .bind(transaction_id)
-        .fetch_all(self.0)
+        .fetch_all(&*self.0)
         .await?;
 
         Ok(Some(transaction.try_into_domain(&entries)?))

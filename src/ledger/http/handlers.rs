@@ -1,19 +1,19 @@
 use std::iter::FromIterator;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
 };
 use serde::Deserialize;
-use sqlx::PgPool;
 use tracing::error;
 use uuid::Uuid;
 
 use crate::{
     authentication::TokenClaims,
+    database::PostgresConnection,
     http_err::{ApiError, ApiResponse, ErrorRep},
     ledger::services::LedgerService,
     repos::transactions::TransactionQuery,
@@ -32,6 +32,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/accounts", get(get_accounts))
         .route("/accounts/:account/balance", get(get_account_balance))
+        .route("/active-accounts", get(get_active_accounts))
         .route(
             "/transactions",
             get(get_transactions).post(create_transaction),
@@ -46,9 +47,10 @@ pub fn routes() -> Router<AppState> {
 
 async fn delete_transaction(
     claims: TokenClaims,
-    State(db): State<PgPool>,
+    State(app_state): State<AppState>,
     Path(transaction_id): Path<Uuid>,
 ) -> ApiResponse<StatusCode> {
+    let db = PostgresConnection::from_ref(&app_state);
     let commands = PostgresCommands(&db);
 
     match commands
@@ -66,10 +68,10 @@ async fn delete_transaction(
 
 async fn get_account_balance(
     claims: TokenClaims,
-    State(db): State<PgPool>,
+    State(db): State<PostgresConnection>,
     Path(account): Path<String>,
 ) -> ApiResponse<Json<Vec<reps::CurrencyAmount>>> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     match queries
         .get_account_balance(claims.user_id(), account.to_owned())
@@ -93,10 +95,10 @@ struct GetAccountsParams {
 
 async fn get_accounts(
     claims: TokenClaims,
-    State(db): State<PgPool>,
+    State(db): State<PostgresConnection>,
     Query(query): Query<GetAccountsParams>,
 ) -> ApiResponse<Json<Vec<String>>> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     match queries
         .list_accounts_by_popularity(claims.user_id(), query.query)
@@ -105,6 +107,24 @@ async fn get_accounts(
         Ok(accounts) => Ok(Json(accounts)),
         Err(error) => {
             error!(?error, "Failed to list accounts.");
+
+            Err(ApiError::InternalServerError)
+        }
+    }
+}
+
+async fn get_active_accounts(
+    claims: TokenClaims,
+    State(ledger_service): State<LedgerService>,
+) -> ApiResponse<Json<Vec<String>>> {
+    match ledger_service.list_active_accounts(claims.user_id()).await {
+        Ok(accounts) => Ok(Json(accounts)),
+        Err(error) => {
+            error!(
+                ?error,
+                user_id = claims.user_id(),
+                "Failed to list active accounts for user."
+            );
 
             Err(ApiError::InternalServerError)
         }
@@ -138,10 +158,10 @@ impl From<Option<domain::transactions::Transaction>> for GetTransactionResponse 
 
 async fn get_transaction(
     claims: TokenClaims,
-    State(db): State<PgPool>,
+    State(db): State<PostgresConnection>,
     Path(transaction_id): Path<Uuid>,
 ) -> Result<GetTransactionResponse, ApiError> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db);
 
     match queries
         .get_transaction(claims.user_id(), transaction_id)
@@ -218,10 +238,10 @@ impl From<reps::TransactionValidationError> for CreateTransactionResponse {
 
 async fn create_transaction(
     claims: TokenClaims,
-    State(db): State<PgPool>,
+    State(db): State<PostgresConnection>,
     Json(new_transaction): Json<reps::NewTransaction>,
 ) -> ApiResponse<CreateTransactionResponse> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db.clone());
 
     let used_currency_codes = Vec::from_iter(new_transaction.used_currency_codes());
     let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
@@ -283,11 +303,11 @@ impl From<reps::TransactionValidationError> for UpdateTransactionResponse {
 
 async fn update_transaction(
     claims: TokenClaims,
-    State(db): State<PgPool>,
+    State(db): State<PostgresConnection>,
     Path(transaction_id): Path<Uuid>,
     Json(updated_transaction): Json<reps::NewTransaction>,
 ) -> ApiResponse<UpdateTransactionResponse> {
-    let queries = PostgresQueries(&db);
+    let queries = PostgresQueries(db.clone());
 
     let used_currency_codes = Vec::from_iter(updated_transaction.used_currency_codes());
     let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {

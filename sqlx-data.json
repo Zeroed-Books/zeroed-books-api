@@ -50,6 +50,26 @@
     },
     "query": "\n            SELECT *\n            FROM transaction_entry e\n            WHERE e.transaction_id = ANY($1)\n            ORDER BY e.\"order\"\n            "
   },
+  "0c5253241ff5deb8e2f8b276ce2d0dc2b29d53b3374ddd1e2d042c82228475ae": {
+    "describe": {
+      "columns": [
+        {
+          "name": "name",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT DISTINCT a.name\n            FROM transaction_entry e\n                LEFT JOIN account a ON a.id = e.account_id\n                LEFT JOIN transaction t ON t.id = e.transaction_id\n            WHERE a.user_id = $1\n                AND t.created_at >= now() - INTERVAL '1 year'\n            "
+  },
   "29fdb3ba01954392562792479d84d3be8489658d02039b793992aa6aa9a4f52e": {
     "describe": {
       "columns": [

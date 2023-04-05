@@ -1,10 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::{extract::FromRef, Router};
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::postgres::PgPoolOptions;
 
 use crate::{
-    database::PostgresConnection, ledger::services::LedgerService,
+    database::PostgresConnection,
+    ledger::{
+        queries::{postgres::PostgresQueries, DynAccountQueries},
+        services::LedgerService,
+    },
     repos::transactions::DynTransactionRepo,
 };
 
@@ -19,7 +23,7 @@ pub struct Options {
 
 #[derive(Clone)]
 pub struct AppState {
-    db: PgPool,
+    db: PostgresConnection,
     jwks: axum_jwks::Jwks,
     ledger_service: LedgerService,
 }
@@ -35,12 +39,16 @@ pub async fn serve(opts: Options) -> anyhow::Result<()> {
 
     let db_connection = PostgresConnection::new(db_pool.clone());
 
+    let account_queries: DynAccountQueries = Arc::new(PostgresQueries(db_connection.clone()));
     let transaction_repo: DynTransactionRepo = Arc::new(db_connection.clone());
 
-    let ledger_service = LedgerService::new(transaction_repo);
+    let ledger_service = LedgerService {
+        account_queries,
+        transaction_repo,
+    };
 
     let state = AppState {
-        db: db_pool,
+        db: db_connection,
         jwks,
         ledger_service,
     };
@@ -62,7 +70,7 @@ impl FromRef<AppState> for axum_jwks::Jwks {
     }
 }
 
-impl FromRef<AppState> for PgPool {
+impl FromRef<AppState> for PostgresConnection {
     fn from_ref(state: &AppState) -> Self {
         state.db.clone()
     }
