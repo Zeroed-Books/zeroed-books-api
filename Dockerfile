@@ -38,7 +38,6 @@ COPY --from=builder /etc/group /etc/group
 WORKDIR /zeroed-books
 
 COPY --from=builder /usr/src/zeroed-books-api/target/release/zeroed-books-api ./
-COPY templates ./templates
 
 USER zeroed-books:zeroed-books
 
