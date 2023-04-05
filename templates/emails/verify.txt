@@ -1,5 +1,0 @@
-Hello,
-
-Please use the following token to verify your email address:
-
-{{ token }}
