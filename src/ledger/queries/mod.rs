@@ -5,7 +5,7 @@
 
 pub mod postgres;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -51,7 +51,19 @@ pub trait AccountQueries {
         user_id: &str,
         search_string: Option<String>,
     ) -> Result<Vec<String>>;
+
+    /// Get accounts that have had activity in the past year.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the user who owns the accounts.
+    ///
+    /// # Returns
+    /// A list containing the names of the accounts that have been recently
+    /// active.
+    async fn list_active_accounts(&self, user_id: &str) -> Result<Vec<String>>;
 }
+
+pub type DynAccountQueries = Arc<dyn AccountQueries + Send + Sync>;
 
 #[async_trait]
 pub trait CurrencyQueries {
