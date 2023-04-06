@@ -2,13 +2,20 @@ use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use sqlx::{Postgres, QueryBuilder, Row};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
 use crate::{
     database::PostgresConnection,
-    ledger::{domain, models},
+    ledger::{
+        domain::{
+            self,
+            currency::{Currency, CurrencyAmount},
+        },
+        models,
+    },
 };
 
 use super::{AccountQueries, CurrencyQueries, TransactionQueries};
@@ -81,6 +88,44 @@ impl AccountQueries for PostgresQueries {
                 ))
             })
             .collect::<Result<_>>()?)
+    }
+
+    async fn get_monthly_balance(
+        &self,
+        user_id: &str,
+        account_name: &str,
+    ) -> Result<HashMap<NaiveDate, Vec<CurrencyAmount>>> {
+        let balances = sqlx::query!(
+            r#"
+            SELECT DATE_TRUNC('month', t.date)::date AS "month!", c.code, c.minor_units, COALESCE(SUM(e.amount), 0) AS "amount!"
+            FROM transaction_entry e
+                LEFT JOIN transaction t ON t.id = e.transaction_id
+                LEFT JOIN account a ON a.id = e.account_id
+                LEFT JOIN currency c ON c.code = e.currency
+            WHERE t.user_id = $1
+                AND (a.name = $2 OR a.name LIKE $2 || ':%')
+            GROUP BY DATE_TRUNC('month', t.date), c.code
+            ORDER BY "month!"
+            "#,
+            user_id,
+            account_name,
+        )
+        .fetch_all(&*self.0)
+        .await?;
+
+        let mut result: HashMap<NaiveDate, Vec<CurrencyAmount>> = HashMap::default();
+        for record in balances {
+            let currency = Currency::new(record.code, record.minor_units.try_into().unwrap_or(0));
+            let amount =
+                CurrencyAmount::from_minor(currency, record.amount.try_into().unwrap_or(0));
+
+            result
+                .entry(record.month)
+                .and_modify(|amounts| amounts.push(amount.clone()))
+                .or_insert_with(move || vec![amount]);
+        }
+
+        Ok(result)
     }
 
     async fn list_accounts_by_popularity(

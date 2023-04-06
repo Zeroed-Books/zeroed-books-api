@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use super::domain::{self, currency::CurrencyAmount};
@@ -32,6 +33,18 @@ pub trait AccountQueries {
         user_id: &str,
         account_name: String,
     ) -> Result<Vec<CurrencyAmount>>;
+
+    /// Get the monthly balance of the specified account for the last year.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the account owner.
+    /// * `account_name` - The name of the account to list balances for. This
+    ///   matches the exact account, and any child accounts.
+    async fn get_monthly_balance(
+        &self,
+        user_id: &str,
+        account_name: &str,
+    ) -> Result<HashMap<NaiveDate, Vec<CurrencyAmount>>>;
 
     /// List accounts by popularity.
     ///
@@ -64,6 +77,11 @@ pub trait AccountQueries {
 }
 
 pub type DynAccountQueries = Arc<dyn AccountQueries + Send + Sync>;
+
+pub struct MonthAccountBalance {
+    pub month: NaiveDate,
+    pub balances: Vec<CurrencyAmount>,
+}
 
 #[async_trait]
 pub trait CurrencyQueries {
