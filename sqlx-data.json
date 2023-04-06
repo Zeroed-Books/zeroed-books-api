@@ -172,7 +172,7 @@
     },
     "query": "\n            SELECT * FROM currency\n            WHERE code = ANY($1)\n            ORDER BY code\n            "
   },
-  "6c6153000afc84f32036f13e689bd14fe407f55a571be6e3a4e7429075fe6539": {
+  "6b325d011eb75e07492e6eab0d9ee3e3558cdeb14b06186cbc0dd5f2b900d9cc": {
     "describe": {
       "columns": [
         {
@@ -209,7 +209,7 @@
         ]
       }
     },
-    "query": "\n            SELECT DATE_TRUNC('month', t.date)::date AS \"month!\", c.code, c.minor_units, COALESCE(SUM(e.amount), 0) AS \"amount!\"\n            FROM transaction_entry e\n                LEFT JOIN transaction t ON t.id = e.transaction_id\n                LEFT JOIN account a ON a.id = e.account_id\n                LEFT JOIN currency c ON c.code = e.currency\n            WHERE t.user_id = $1\n                AND (a.name = $2 OR a.name LIKE $2 || ':%')\n                AND t.date >= now() - INTERVAL '1 year'\n            GROUP BY DATE_TRUNC('month', t.date), c.code\n            ORDER BY \"month!\"\n            "
+    "query": "\n            SELECT DATE_TRUNC('month', t.date)::date AS \"month!\", c.code, c.minor_units, COALESCE(SUM(e.amount), 0) AS \"amount!\"\n            FROM transaction_entry e\n                LEFT JOIN transaction t ON t.id = e.transaction_id\n                LEFT JOIN account a ON a.id = e.account_id\n                LEFT JOIN currency c ON c.code = e.currency\n            WHERE t.user_id = $1\n                AND (a.name = $2 OR a.name LIKE $2 || ':%')\n                AND t.date >= DATE_TRUNC('month', now() - INTERVAL '1 year')\n            GROUP BY DATE_TRUNC('month', t.date), c.code\n            ORDER BY \"month!\"\n            "
   },
   "72ec6e3f62afb88bdc8780146fbeab67551c0c34c48e143dd3c8f0d177f4316e": {
     "describe": {

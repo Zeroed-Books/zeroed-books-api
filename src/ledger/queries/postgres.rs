@@ -104,7 +104,7 @@ impl AccountQueries for PostgresQueries {
                 LEFT JOIN currency c ON c.code = e.currency
             WHERE t.user_id = $1
                 AND (a.name = $2 OR a.name LIKE $2 || ':%')
-                AND t.date >= now() - INTERVAL '1 year'
+                AND t.date >= DATE_TRUNC('month', now() - INTERVAL '1 year')
             GROUP BY DATE_TRUNC('month', t.date), c.code
             ORDER BY "month!"
             "#,
