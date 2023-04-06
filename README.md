@@ -1,7 +1,7 @@
 # Zeroed Books API
 
-[![GitHub branch checks state](https://img.shields.io/github/checks-status/Zeroed-Books/zeroed-books-api/main)](https://github.com/Zeroed-Books/zeroed-books-api/actions)
-[![Docker Pulls](https://img.shields.io/docker/pulls/zeroedbooks/api)](https://hub.docker.com/r/zeroedbooks/api)
+[![GitHub workflow publish status](https://img.shields.io/github/actions/workflow/status/Zeroed-Books/zeroed-books-api/publish.yml?branch=main)](https://github.com/Zeroed-Books/zeroed-books-api/actions/workflows/publish.yml)
+[![GitHub Container Registry package](https://img.shields.io/badge/GHCR-zeroed--books%2Fapi-blue)](https://github.com/orgs/Zeroed-Books/packages/container/package/api)
 
 A potential replacement for the Zeroed Books API written in Rust using Rocket.
 
