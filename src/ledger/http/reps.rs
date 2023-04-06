@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -175,7 +176,7 @@ impl Serialize for EncodedTransactionCursor {
             self.0.after_created_at.to_rfc3339()
         );
 
-        serializer.collect_str(&base64::encode(encoded))
+        serializer.collect_str(&general_purpose::URL_SAFE.encode(encoded))
     }
 }
 
@@ -193,7 +194,8 @@ impl<'de> Deserialize<'de> for EncodedTransactionCursor {
             }
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                let formatted = base64::decode(v)
+                let formatted = general_purpose::URL_SAFE
+                    .decode(v)
                     .map(String::from_utf8)
                     .map_err(serde::de::Error::custom)?
                     .map_err(serde::de::Error::custom)?;
