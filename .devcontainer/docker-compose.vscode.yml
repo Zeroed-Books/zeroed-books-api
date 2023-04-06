@@ -1,23 +1,19 @@
 services:
     vscode:
-        build:
-            context: .
-            dockerfile: .devcontainer/Dockerfile
-
+        image: mcr.microsoft.com/devcontainers/rust:0-1-bullseye
         environment:
-            # Required for the `diesel` CLI to work.
+            # Required for the `sqlx` CLI to work.
             DATABASE_URL: postgres://postgres:password@postgres/postgres
 
-            REDIS_URL: redis://redis
-
         volumes:
-            # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
-            # mounts are relative to the first file in the list, which is a level up.
-            - .:/workspace:cached
+            # Mounts the project folder to '/workspace'. While this file is in
+            # `.devcontainer`, mounts are relative to the first file in the
+            # list, which is a level up.
+            - .:/workspace/zeroed-books-api:cached
 
-            # Cache GitHub credentials so we don't have to keep
-            # re-authenticating.
-            - github-credentials:/home/vscode/.config/gh
+            # Cache cargo to avoid having to rebuild everything if the container
+            # is recreated.
+            - cargo-cache:/usr/local/cargo
 
         # [Optional] Required for ptrace-based debuggers like C++, Go, and Rust
         cap_add:
@@ -29,4 +25,4 @@ services:
         command: /bin/sh -c "while sleep 1000; do :; done"
 
 volumes:
-    github-credentials: null
+    cargo-cache:
