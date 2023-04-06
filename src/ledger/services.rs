@@ -1,11 +1,15 @@
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 
 use anyhow::Result;
+use chrono::NaiveDate;
 
 use crate::repos::transactions::{DynTransactionRepo, TransactionQuery};
 
 use super::{
-    domain::transactions::{Transaction, TransactionCursor},
+    domain::{
+        currency::CurrencyAmount,
+        transactions::{Transaction, TransactionCursor},
+    },
     queries::DynAccountQueries,
 };
 
@@ -21,6 +25,16 @@ pub struct TransactionCollection {
 }
 
 impl LedgerService {
+    pub async fn get_monthly_account_balance(
+        &self,
+        user_id: &str,
+        account_name: &str,
+    ) -> Result<HashMap<NaiveDate, Vec<CurrencyAmount>>> {
+        self.account_queries
+            .get_monthly_balance(user_id, account_name)
+            .await
+    }
+
     pub async fn list_active_accounts(&self, user_id: &str) -> Result<Vec<String>> {
         self.account_queries.list_active_accounts(user_id).await
     }

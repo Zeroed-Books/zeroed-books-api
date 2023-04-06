@@ -1,4 +1,4 @@
-use std::iter::FromIterator;
+use std::{collections::HashMap, iter::FromIterator};
 
 use axum::{
     extract::{FromRef, Path, Query, State},
@@ -7,6 +7,8 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use axum_jwks::Claims;
+use chrono::NaiveDate;
 use serde::Deserialize;
 use tracing::error;
 use uuid::Uuid;
@@ -32,6 +34,10 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/accounts", get(get_accounts))
         .route("/accounts/:account/balance", get(get_account_balance))
+        .route(
+            "/accounts/:account/balance/monthly",
+            get(get_account_balance_monthly),
+        )
         .route("/active-accounts", get(get_active_accounts))
         .route(
             "/transactions",
@@ -46,7 +52,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn delete_transaction(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(app_state): State<AppState>,
     Path(transaction_id): Path<Uuid>,
 ) -> ApiResponse<StatusCode> {
@@ -67,7 +73,7 @@ async fn delete_transaction(
 }
 
 async fn get_account_balance(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
     Path(account): Path<String>,
 ) -> ApiResponse<Json<Vec<reps::CurrencyAmount>>> {
@@ -88,13 +94,45 @@ async fn get_account_balance(
     }
 }
 
+async fn get_account_balance_monthly(
+    Claims(claims): Claims<TokenClaims>,
+    State(ledger_service): State<LedgerService>,
+    Path(account): Path<String>,
+) -> ApiResponse<Json<HashMap<NaiveDate, Vec<reps::CurrencyAmount>>>> {
+    match ledger_service
+        .get_monthly_account_balance(claims.user_id(), &account)
+        .await
+    {
+        Ok(balances) => Ok(Json(
+            balances
+                .iter()
+                .map(|(month, amounts)| {
+                    (
+                        month.to_owned(),
+                        amounts.iter().map(reps::CurrencyAmount::from).collect(),
+                    )
+                })
+                .collect(),
+        )),
+        Err(error) => {
+            error!(
+                user_id = claims.user_id(),
+                ?error,
+                "Failed to query for monthly account balances."
+            );
+
+            Err(ApiError::InternalServerError)
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct GetAccountsParams {
     query: Option<String>,
 }
 
 async fn get_accounts(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
     Query(query): Query<GetAccountsParams>,
 ) -> ApiResponse<Json<Vec<String>>> {
@@ -114,7 +152,7 @@ async fn get_accounts(
 }
 
 async fn get_active_accounts(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(ledger_service): State<LedgerService>,
 ) -> ApiResponse<Json<Vec<String>>> {
     match ledger_service.list_active_accounts(claims.user_id()).await {
@@ -157,7 +195,7 @@ impl From<Option<domain::transactions::Transaction>> for GetTransactionResponse 
 }
 
 async fn get_transaction(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
     Path(transaction_id): Path<Uuid>,
 ) -> Result<GetTransactionResponse, ApiError> {
@@ -183,7 +221,7 @@ struct GetTransactionsParams {
 }
 
 async fn get_transactions(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(ledger_service): State<LedgerService>,
     Query(GetTransactionsParams { account, after }): Query<GetTransactionsParams>,
 ) -> ApiResponse<Json<reps::ResourceCollection<reps::Transaction, reps::EncodedTransactionCursor>>>
@@ -237,7 +275,7 @@ impl From<reps::TransactionValidationError> for CreateTransactionResponse {
 }
 
 async fn create_transaction(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
     Json(new_transaction): Json<reps::NewTransaction>,
 ) -> ApiResponse<CreateTransactionResponse> {
@@ -302,7 +340,7 @@ impl From<reps::TransactionValidationError> for UpdateTransactionResponse {
 }
 
 async fn update_transaction(
-    claims: TokenClaims,
+    Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
     Path(transaction_id): Path<Uuid>,
     Json(updated_transaction): Json<reps::NewTransaction>,
