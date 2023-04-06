@@ -2777,7 +2777,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-jwks",
- "base64 0.13.1",
+ "base64 0.21.0",
  "chrono",
  "clap",
  "reqwest",
