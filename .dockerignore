@@ -1,9 +1,10 @@
-# Builds
-target
-
-# Config files
 .devcontainer
+.github
 .vscode
-
-# The Dockerfile itself
+target
+.dockerignore
+.gitignore
+docker-compose.base.yml
+docker-compose.standalone.yml
 Dockerfile
+README.md
