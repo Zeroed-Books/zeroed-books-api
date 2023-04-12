@@ -27,10 +27,7 @@
                 "RUST_LOG": "info,zeroed_books_api=trace,axum_jwks=debug",
                 "JWT_AUDIENCE": "https://api.zeroedbooks.com/",
                 "JWT_AUTHORITY": "https://zeroed-books-dev.us.auth0.com",
-                // A stable secret key so cookie sessions stay valid across restarts.
-                // Generated with:
-                //   $ openssl rand -base64 50
-                "SECRET_KEY": "xvpV7KL41RIFdnU7KTO99jYduEhEHJnsoYn26cEwrYIXPGGuqNXenxfRZE1+xSSzcZo="
+                "SQLX_OFFLINE": "true"
             }
         },
         {
