@@ -33,6 +33,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Download container artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: zeroed-books-api
+          path: /tmp
+
+      - name: Load docker image
+        run: docker load < /tmp/zeroed-books-api.tar.gz
+
       - name: Log in to registry
         # This is where you will update the personal access token to GITHUB_TOKEN
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
