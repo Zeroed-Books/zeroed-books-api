@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { version = "1.0.70" }
 async-trait = { version = "0.1.68" }
-axum = { version = "0.6.12", features = ["tokio"] }
+axum = { version = "0.6.15", features = ["tokio"] }
 axum-jwks = { version = "0.4.0" }
 base64 = { version = "0.21.0" }
 chrono = { version = "0.4.24", features = ["serde"] }
