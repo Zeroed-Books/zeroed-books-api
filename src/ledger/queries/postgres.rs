@@ -13,12 +13,13 @@ use crate::{
         domain::{
             self,
             currency::{Currency, CurrencyAmount},
+            reports::InstantBalances,
         },
         models,
     },
 };
 
-use super::{AccountQueries, CurrencyQueries, TransactionQueries};
+use super::{AccountQueries, CurrencyQueries, ReportInterval, TransactionQueries};
 
 /// A struct to provide queries for the Postgres database backing the
 /// application.
@@ -187,6 +188,61 @@ impl AccountQueries for PostgresQueries {
         .collect::<Vec<_>>();
 
         Ok(accounts)
+    }
+
+    async fn periodic_cumulative_balance(
+        &self,
+        user_id: &str,
+        account: &str,
+        interval: ReportInterval,
+    ) -> Result<HashMap<String, InstantBalances>> {
+        let interval_value = match interval {
+            ReportInterval::Daily => "day",
+            ReportInterval::Monthly => "month",
+        };
+
+        let balances = sqlx::query!(
+            r#"
+            SELECT "date!", code, minor_units, "amount!"
+            FROM (
+                SELECT
+                    DATE_TRUNC($3, t.date)::date AS "date!",
+                    c.code,
+                    c.minor_units,
+                    COALESCE(SUM(e.amount) OVER (PARTITION BY c.code ORDER BY t.date), 0) AS "amount!"
+                FROM transaction_entry e
+                    LEFT JOIN transaction t ON t.id = e.transaction_id
+                    LEFT JOIN account a ON a.id = e.account_id
+                    LEFT JOIN currency c ON c.code = e.currency
+                WHERE t.user_id = $1
+                    AND (a.name = $2 OR a.name LIKE $2 || ':%')
+                ORDER BY "date!"
+            ) AS sums
+            WHERE "date!" >= DATE_TRUNC($3, NOW() - INTERVAL '1 year')
+            GROUP BY "date!", code, minor_units, "amount!"
+            ORDER BY "date!"
+            "#,
+            user_id,
+            account,
+            interval_value
+        )
+        .fetch_all(&*self.0)
+        .await?;
+
+        let mut balances_by_code: HashMap<String, InstantBalances> = HashMap::new();
+        for record in balances {
+            let currency = Currency::new(record.code, record.minor_units.try_into()?);
+            let amount: i32 = record.amount.try_into()?;
+
+            balances_by_code
+                .entry(currency.code().to_owned())
+                .and_modify(|amounts| amounts.push(record.date, amount))
+                .or_insert_with(|| {
+                    InstantBalances::new_with_balance(currency, record.date, amount)
+                });
+        }
+
+        Ok(balances_by_code)
     }
 }
 

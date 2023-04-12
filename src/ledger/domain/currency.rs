@@ -80,6 +80,27 @@ impl Currency {
             .map_err(|_| CurrencyParseError::InvalidNumber(raw_amount.to_owned()))
     }
 
+    pub fn format_value(&self, value: i32) -> String {
+        // Preserve the sign, but then do string manipulation on the absolute
+        // value so we don't have to worry about a negative sign.
+        let sign = if value.is_negative() { "-" } else { "" };
+        let amount_str = value.abs().to_string();
+
+        // We have to pad the value in order to ensure the string is long enough
+        // to insert the decimal point at the appropriate location.
+        let padded = format!(
+            "{:0>width$}",
+            amount_str,
+            width = usize::from(self.minor_units) + 1
+        );
+        let decimal_location = padded.len() - usize::from(self.minor_units);
+
+        let whole_part = &padded[..decimal_location];
+        let decimal_part = &padded[decimal_location..];
+
+        format!("{}{}.{}", sign, whole_part, decimal_part)
+    }
+
     pub fn code(&self) -> &str {
         &self.code
     }
@@ -119,24 +140,7 @@ impl CurrencyAmount {
     }
 
     pub fn format_value(&self) -> String {
-        // Preserve the sign, but then do string manipulation on the absolute
-        // value so we don't have to worry about a negative sign.
-        let sign = if self.value.is_negative() { "-" } else { "" };
-        let amount_str = self.value.abs().to_string();
-
-        // We have to pad the value in order to ensure the string is long enough
-        // to insert the decimal point at the appropriate location.
-        let padded = format!(
-            "{:0>width$}",
-            amount_str,
-            width = usize::from(self.currency.minor_units) + 1
-        );
-        let decimal_location = padded.len() - usize::from(self.currency.minor_units);
-
-        let whole_part = &padded[..decimal_location];
-        let decimal_part = &padded[decimal_location..];
-
-        format!("{}{}.{}", sign, whole_part, decimal_part)
+        self.currency.format_value(self.value)
     }
 }
 

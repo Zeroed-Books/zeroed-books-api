@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use chrono::NaiveDate;
 use uuid::Uuid;
 
-use super::domain::{self, currency::CurrencyAmount};
+use super::domain::{self, currency::CurrencyAmount, reports::InstantBalances};
 
 /// Queries for account information.
 #[async_trait]
@@ -74,13 +74,35 @@ pub trait AccountQueries {
     /// A list containing the names of the accounts that have been recently
     /// active.
     async fn list_active_accounts(&self, user_id: &str) -> Result<Vec<String>>;
+
+    /// Get the cummulative balance for an account.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the user who owns the account.
+    /// * `account` - The name of the account to report balances for.
+    /// * `interval` - The interval between balance reports.
+    ///
+    /// # Returns
+    /// A map of currency codes to instant balances. The instant balances are a
+    /// vector of balances associated with a single currency, ordered by date.
+    async fn periodic_cumulative_balance(
+        &self,
+        user_id: &str,
+        account: &str,
+        interval: ReportInterval,
+    ) -> Result<HashMap<String, InstantBalances>>;
 }
 
 pub type DynAccountQueries = Arc<dyn AccountQueries + Send + Sync>;
 
 pub struct MonthAccountBalance {
     pub month: NaiveDate,
-    pub balances: Vec<CurrencyAmount>,
+    pub balance: CurrencyAmount,
+}
+
+pub enum ReportInterval {
+    Daily,
+    Monthly,
 }
 
 #[async_trait]

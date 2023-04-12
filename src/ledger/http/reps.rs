@@ -261,3 +261,63 @@ impl From<&domain::transactions::TransactionEntry> for TransactionEntry {
         }
     }
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PeriodicAccountBalances(HashMap<String, CurrencyInstantBalances>);
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CurrencyInstantBalances {
+    pub currency: Currency,
+    pub balances: Vec<InstantBalance>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct InstantBalance {
+    instant: NaiveDate,
+    balance: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Currency {
+    pub code: String,
+    pub minor_units: u8,
+}
+
+impl From<HashMap<String, domain::reports::InstantBalances>> for PeriodicAccountBalances {
+    fn from(value: HashMap<String, domain::reports::InstantBalances>) -> Self {
+        let mut result: HashMap<String, CurrencyInstantBalances> = HashMap::new();
+        for (currency_code, balances) in value {
+            result.insert(currency_code, balances.into());
+        }
+
+        Self(result)
+    }
+}
+
+impl From<domain::reports::InstantBalances> for CurrencyInstantBalances {
+    fn from(value: domain::reports::InstantBalances) -> Self {
+        let currency = value.currency();
+        let balances = value
+            .balances()
+            .iter()
+            .map(|balance| InstantBalance {
+                instant: balance.instant(),
+                balance: currency.format_value(balance.amount()),
+            })
+            .collect();
+
+        Self {
+            currency: currency.into(),
+            balances,
+        }
+    }
+}
+
+impl From<&domain::currency::Currency> for Currency {
+    fn from(value: &domain::currency::Currency) -> Self {
+        Self {
+            code: value.code().to_owned(),
+            minor_units: value.minor_units(),
+        }
+    }
+}

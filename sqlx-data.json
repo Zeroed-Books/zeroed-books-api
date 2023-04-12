@@ -172,6 +172,46 @@
     },
     "query": "\n            SELECT * FROM currency\n            WHERE code = ANY($1)\n            ORDER BY code\n            "
   },
+  "632768d50b82f0ee5deca2129ae223e1de5566a8e7fefd9521aeb4c6205c63c8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "date!",
+          "ordinal": 0,
+          "type_info": "Date"
+        },
+        {
+          "name": "code",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "minor_units",
+          "ordinal": 2,
+          "type_info": "Int2"
+        },
+        {
+          "name": "amount!",
+          "ordinal": 3,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null,
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT \"date!\", code, minor_units, \"amount!\"\n            FROM (\n                SELECT\n                    DATE_TRUNC($3, t.date)::date AS \"date!\",\n                    c.code,\n                    c.minor_units,\n                    COALESCE(SUM(e.amount) OVER (PARTITION BY c.code ORDER BY t.date), 0) AS \"amount!\"\n                FROM transaction_entry e\n                    LEFT JOIN transaction t ON t.id = e.transaction_id\n                    LEFT JOIN account a ON a.id = e.account_id\n                    LEFT JOIN currency c ON c.code = e.currency\n                WHERE t.user_id = $1\n                    AND (a.name = $2 OR a.name LIKE $2 || ':%')\n                ORDER BY \"date!\"\n            ) AS sums\n            WHERE \"date!\" >= DATE_TRUNC($3, NOW() - INTERVAL '1 year')\n            GROUP BY \"date!\", code, minor_units, \"amount!\"\n            ORDER BY \"date!\"\n            "
+  },
   "6b325d011eb75e07492e6eab0d9ee3e3558cdeb14b06186cbc0dd5f2b900d9cc": {
     "describe": {
       "columns": [
