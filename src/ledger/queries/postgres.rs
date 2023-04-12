@@ -209,7 +209,7 @@ impl AccountQueries for PostgresQueries {
                     DATE_TRUNC($3, t.date)::date AS "date!",
                     c.code,
                     c.minor_units,
-                    COALESCE(SUM(e.amount) OVER (PARTITION BY c.code ORDER BY t.date), 0) AS "amount!"
+                    COALESCE(SUM(e.amount) OVER (PARTITION BY c.code ORDER BY DATE_TRUNC($3, t.date)), 0) AS "amount!"
                 FROM transaction_entry e
                     LEFT JOIN transaction t ON t.id = e.transaction_id
                     LEFT JOIN account a ON a.id = e.account_id
