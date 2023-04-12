@@ -10,7 +10,7 @@ use axum::{
 use axum_jwks::Claims;
 use chrono::NaiveDate;
 use serde::Deserialize;
-use tracing::error;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use crate::{
@@ -137,13 +137,27 @@ async fn get_account_balance_periodic(
     Claims(claims): Claims<TokenClaims>,
     State(ledger_service): State<LedgerService>,
     Path(account): Path<String>,
+    Query(params): Query<PeriodicAccountBalanceParams>,
 ) -> ApiResponse<Json<PeriodicAccountBalances>> {
+    let interval = match params.interval.as_deref() {
+        None => ReportInterval::Monthly,
+        Some("daily") => ReportInterval::Daily,
+        Some("monthly") => ReportInterval::Monthly,
+        _ => {
+            return Err(ApiError::BadRequest(
+                "Valid intervals are 'daily' or 'monthly'.".to_owned(),
+            ))
+        }
+    };
+
+    debug!(%account, ?interval, "Generating report of periodic monthly balance.");
+
     match ledger_service
         .account_periodic_balance(
             claims.user_id(),
             &account,
             AccountBalanceType::Cummulative,
-            ReportInterval::Daily,
+            interval,
         )
         .await
     {
@@ -158,6 +172,11 @@ async fn get_account_balance_periodic(
             Err(ApiError::InternalServerError)
         }
     }
+}
+
+#[derive(Deserialize)]
+struct PeriodicAccountBalanceParams {
+    interval: Option<String>,
 }
 
 #[derive(Deserialize)]

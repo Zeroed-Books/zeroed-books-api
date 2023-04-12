@@ -7,19 +7,26 @@ use tracing::error;
 
 #[derive(Debug, Error)]
 pub enum ApiError {
+    #[error("bad request: {0}")]
+    BadRequest(String),
+
     #[error("internal server error")]
     InternalServerError,
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorRep {
-                message: "Internal server error.".to_owned(),
-            }),
-        )
-            .into_response()
+        let (status, body) = match self {
+            Self::BadRequest(reason) => (StatusCode::BAD_REQUEST, ErrorRep { message: reason }),
+            Self::InternalServerError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorRep {
+                    message: "Internal server error.".to_owned(),
+                },
+            ),
+        };
+
+        (status, Json(body)).into_response()
     }
 }
 

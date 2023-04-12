@@ -100,6 +100,7 @@ pub struct MonthAccountBalance {
     pub balance: CurrencyAmount,
 }
 
+#[derive(Debug)]
 pub enum ReportInterval {
     Daily,
     Monthly,
