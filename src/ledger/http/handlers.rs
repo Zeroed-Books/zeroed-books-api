@@ -17,7 +17,10 @@ use crate::{
     authentication::TokenClaims,
     database::PostgresConnection,
     http_err::{ApiError, ApiResponse, ErrorRep},
-    ledger::services::LedgerService,
+    ledger::{
+        queries::ReportInterval,
+        services::{AccountBalanceType, LedgerService},
+    },
     repos::transactions::TransactionQuery,
     server::AppState,
 };
@@ -28,7 +31,7 @@ use crate::ledger::{
     queries::{postgres::PostgresQueries, AccountQueries, CurrencyQueries, TransactionQueries},
 };
 
-use super::reps;
+use super::reps::{self, PeriodicAccountBalances};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -37,6 +40,10 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/accounts/:account/balance/monthly",
             get(get_account_balance_monthly),
+        )
+        .route(
+            "/accounts/:account/balance/periodic",
+            get(get_account_balance_periodic),
         )
         .route("/active-accounts", get(get_active_accounts))
         .route(
@@ -119,6 +126,33 @@ async fn get_account_balance_monthly(
                 user_id = claims.user_id(),
                 ?error,
                 "Failed to query for monthly account balances."
+            );
+
+            Err(ApiError::InternalServerError)
+        }
+    }
+}
+
+async fn get_account_balance_periodic(
+    Claims(claims): Claims<TokenClaims>,
+    State(ledger_service): State<LedgerService>,
+    Path(account): Path<String>,
+) -> ApiResponse<Json<PeriodicAccountBalances>> {
+    match ledger_service
+        .account_periodic_balance(
+            claims.user_id(),
+            &account,
+            AccountBalanceType::Cummulative,
+            ReportInterval::Daily,
+        )
+        .await
+    {
+        Ok(balances) => Ok(Json(balances.into())),
+        Err(error) => {
+            error!(
+                user_id = claims.user_id(),
+                ?error,
+                "Failed to query for periodic account balances."
             );
 
             Err(ApiError::InternalServerError)

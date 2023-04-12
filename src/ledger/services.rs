@@ -8,9 +8,10 @@ use crate::repos::transactions::{DynTransactionRepo, TransactionQuery};
 use super::{
     domain::{
         currency::CurrencyAmount,
+        reports::InstantBalances,
         transactions::{Transaction, TransactionCursor},
     },
-    queries::DynAccountQueries,
+    queries::{DynAccountQueries, ReportInterval},
 };
 
 #[derive(Clone)]
@@ -25,6 +26,22 @@ pub struct TransactionCollection {
 }
 
 impl LedgerService {
+    pub async fn account_periodic_balance(
+        &self,
+        user_id: &str,
+        account: &str,
+        balance_type: AccountBalanceType,
+        interval: ReportInterval,
+    ) -> Result<HashMap<String, InstantBalances>> {
+        match balance_type {
+            AccountBalanceType::Cummulative => {
+                self.account_queries
+                    .periodic_cumulative_balance(user_id, account, interval)
+                    .await
+            }
+        }
+    }
+
     pub async fn get_monthly_account_balance(
         &self,
         user_id: &str,
@@ -56,4 +73,9 @@ impl LedgerService {
             next: model_collection.next,
         })
     }
+}
+
+#[derive(Debug)]
+pub enum AccountBalanceType {
+    Cummulative,
 }
