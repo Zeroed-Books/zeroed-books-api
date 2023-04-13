@@ -104,6 +104,7 @@ pub struct MonthAccountBalance {
 pub enum ReportInterval {
     Daily,
     Monthly,
+    Weekly,
 }
 
 #[async_trait]
