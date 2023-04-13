@@ -143,9 +143,10 @@ async fn get_account_balance_periodic(
         None => ReportInterval::Monthly,
         Some("daily") => ReportInterval::Daily,
         Some("monthly") => ReportInterval::Monthly,
+        Some("weekly") => ReportInterval::Weekly,
         _ => {
             return Err(ApiError::BadRequest(
-                "Valid intervals are 'daily' or 'monthly'.".to_owned(),
+                "Valid intervals are 'daily', 'monthly', or 'weekly'.".to_owned(),
             ))
         }
     };

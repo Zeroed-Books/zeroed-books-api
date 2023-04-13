@@ -199,6 +199,7 @@ impl AccountQueries for PostgresQueries {
         let interval_value = match interval {
             ReportInterval::Daily => "day",
             ReportInterval::Monthly => "month",
+            ReportInterval::Weekly => "week",
         };
 
         let balances = sqlx::query!(
