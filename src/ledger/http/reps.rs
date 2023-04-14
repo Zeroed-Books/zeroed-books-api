@@ -129,6 +129,9 @@ impl From<CurrencyParseError> for TransactionValidationError {
 impl From<NewTransactionError> for TransactionValidationError {
     fn from(error: NewTransactionError) -> Self {
         match error {
+            NewTransactionError::NoEntries => Self {
+                message: Some("The transaction has no entries.".to_owned()),
+            },
             NewTransactionError::Unbalanced(_) => Self {
                 message: Some("The entries in the transaction are unbalanced.".to_string()),
             },

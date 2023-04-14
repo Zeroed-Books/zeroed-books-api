@@ -18,6 +18,9 @@ pub struct NewTransaction {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum NewTransactionError {
+    /// The transaction has no entries.
+    NoEntries,
+
     /// The entries in the transaction are not balanced, ie they do not sum to
     /// zero. The value is a mapping of currencies to balances.
     Unbalanced(HashMap<Currency, i32>),
@@ -42,6 +45,10 @@ impl NewTransaction {
         notes: Option<String>,
         mut entries: Vec<NewTransactionEntry>,
     ) -> Result<Self, NewTransactionError> {
+        if entries.is_empty() {
+            return Err(NewTransactionError::NoEntries);
+        }
+
         let mut balancing_entry: Option<&mut NewTransactionEntry> = None;
         let mut cannot_be_balanced = false;
         let mut sums = HashMap::new();
@@ -71,7 +78,7 @@ impl NewTransaction {
             sums.iter().filter(|(_, amount)| **amount != 0).collect();
 
         match (unbalanced_currencies.len(), balancing_entry) {
-            (0, _) => (),
+            (0, None) => (),
             (1, Some(mut entry)) => {
                 let currency = unbalanced_currencies[0].0;
                 let amount = -unbalanced_currencies[0].1;
@@ -382,5 +389,38 @@ mod test {
         let want_sums = HashMap::from([(eur(), 583), (usd(), 2783)]);
 
         assert_eq!(NewTransactionError::Unbalanced(want_sums), error);
+    }
+
+    #[test]
+    fn new_transaction_no_entries() {
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2023, 4, 14).unwrap();
+        let payee = "Payroll".to_owned();
+        let notes = None;
+
+        let error = NewTransaction::new(user_id, date, payee, notes, vec![])
+            .expect_err("empty transaction should error");
+
+        assert_eq!(NewTransactionError::NoEntries, error);
+    }
+
+    #[test]
+    fn new_unbalanced_transaction_single_entry() {
+        let user_id = "user".to_owned();
+        let date = NaiveDate::from_ymd_opt(2022, 1, 16).unwrap();
+        let payee = "Gas".to_string();
+        let notes = None;
+
+        let e1 = NewTransactionEntry {
+            account: "Expenses:Gas".to_string(),
+            amount: None,
+        };
+
+        let entries = vec![e1];
+
+        let error = NewTransaction::new(user_id, date, payee, notes, entries)
+            .expect_err("unbalanced transaction should error");
+
+        assert_eq!(NewTransactionError::Unbalanced(HashMap::default()), error);
     }
 }
