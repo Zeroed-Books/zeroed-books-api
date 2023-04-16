@@ -16,7 +16,10 @@ async-trait = { version = "0.1.68" }
 axum = { version = "0.6.15", features = ["tokio"] }
 axum-jwks = { version = "0.4.0" }
 base64 = { version = "0.21.0" }
-chrono = { version = "0.4.24", features = ["serde"] }
+chrono = { version = "0.4.24", default-features = false, features = [
+    "clock",
+    "serde",
+] }
 clap = { version = "4.2.1", features = ["derive", "env"] }
 reqwest = { version = "0.11.16", features = ["json"] }
 sentry = { version = "0.30.0", default-features = false, features = [
