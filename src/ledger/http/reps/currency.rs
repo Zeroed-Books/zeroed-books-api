@@ -12,7 +12,7 @@ pub struct Currency {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct CurrencyAmount {
     pub currency: Currency,
-    pub value: String,
+    pub value: i32,
 }
 
 impl From<&domain::currency::Currency> for Currency {
@@ -28,7 +28,7 @@ impl From<&domain::currency::CurrencyAmount> for CurrencyAmount {
     fn from(amount: &domain::currency::CurrencyAmount) -> Self {
         Self {
             currency: amount.currency().into(),
-            value: amount.format_value(),
+            value: amount.value(),
         }
     }
 }

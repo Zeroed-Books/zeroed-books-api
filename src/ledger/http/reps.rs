@@ -157,7 +157,7 @@ pub struct CurrencyInstantBalances {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct InstantBalance {
     instant: NaiveDate,
-    balance: String,
+    balance: i32,
 }
 
 impl From<HashMap<String, domain::reports::InstantBalances>> for PeriodicAccountBalances {
@@ -179,7 +179,7 @@ impl From<domain::reports::InstantBalances> for CurrencyInstantBalances {
             .iter()
             .map(|balance| InstantBalance {
                 instant: balance.instant(),
-                balance: currency.format_value(balance.amount()),
+                balance: balance.amount(),
             })
             .collect();
 
