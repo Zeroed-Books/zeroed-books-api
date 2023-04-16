@@ -1,3 +1,5 @@
+mod currency;
+
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -9,25 +11,12 @@ use uuid::Uuid;
 
 use crate::ledger::domain;
 
+pub use currency::{Currency, CurrencyAmount};
+
 #[derive(Serialize)]
 pub struct ResourceCollection<T: Serialize, C: Serialize> {
     pub next: Option<C>,
     pub items: Vec<T>,
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-pub struct CurrencyAmount {
-    pub currency: String,
-    pub value: String,
-}
-
-impl From<&domain::currency::CurrencyAmount> for CurrencyAmount {
-    fn from(amount: &domain::currency::CurrencyAmount) -> Self {
-        Self {
-            currency: amount.currency().code().to_owned(),
-            value: amount.format_value(),
-        }
-    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -171,12 +160,6 @@ pub struct InstantBalance {
     balance: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Currency {
-    pub code: String,
-    pub minor_units: u8,
-}
-
 impl From<HashMap<String, domain::reports::InstantBalances>> for PeriodicAccountBalances {
     fn from(value: HashMap<String, domain::reports::InstantBalances>) -> Self {
         let mut result: HashMap<String, CurrencyInstantBalances> = HashMap::new();
@@ -203,15 +186,6 @@ impl From<domain::reports::InstantBalances> for CurrencyInstantBalances {
         Self {
             currency: currency.into(),
             balances,
-        }
-    }
-}
-
-impl From<&domain::currency::Currency> for Currency {
-    fn from(value: &domain::currency::Currency) -> Self {
-        Self {
-            code: value.code().to_owned(),
-            minor_units: value.minor_units(),
         }
     }
 }
