@@ -119,7 +119,7 @@ impl NewTransactionEntry {
     pub fn from_domain_entries(
         transaction_id: Uuid,
         user_id: String,
-        entries: &[domain::transactions::TransactionEntry],
+        entries: &[domain::transactions::NewTransactionEntry],
     ) -> anyhow::Result<Vec<Self>> {
         entries
             .iter()
@@ -132,7 +132,7 @@ impl NewTransactionEntry {
                         user_id: user_id.clone(),
                         name: entry.account().to_owned(),
                     },
-                    currency: entry.amount().currency().code().to_owned(),
+                    currency: entry.amount().currency().to_owned(),
                     amount: entry.amount().value(),
                 })
             })
