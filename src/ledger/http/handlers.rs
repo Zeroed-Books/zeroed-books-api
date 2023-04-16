@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::FromIterator};
+use std::collections::HashMap;
 
 use axum::{
     extract::{FromRef, Path, Query, State},
@@ -18,6 +18,7 @@ use crate::{
     database::PostgresConnection,
     http_err::{ApiError, ApiResponse, ErrorRep},
     ledger::{
+        domain::transactions::{NewTransaction, NewTransactionData},
         queries::ReportInterval,
         services::{AccountBalanceType, LedgerService},
     },
@@ -28,7 +29,7 @@ use crate::{
 use crate::ledger::{
     commands::{postgres::PostgresCommands, TransactionCommands, UpdateTransactionError},
     domain,
-    queries::{postgres::PostgresQueries, AccountQueries, CurrencyQueries, TransactionQueries},
+    queries::{postgres::PostgresQueries, AccountQueries, TransactionQueries},
 };
 
 use super::reps::{self, PeriodicAccountBalances};
@@ -145,7 +146,7 @@ async fn get_account_balance_periodic(
         Some("monthly") => ReportInterval::Monthly,
         Some("weekly") => ReportInterval::Weekly,
         _ => {
-            return Err(ApiError::BadRequest(
+            return Err(ApiError::BadRequestReason(
                 "Valid intervals are 'daily', 'monthly', or 'weekly'.".to_owned(),
             ))
         }
@@ -302,58 +303,16 @@ async fn get_transactions(
     }
 }
 
-pub enum CreateTransactionResponse {
-    Created(reps::Transaction),
-    BadRequest(reps::TransactionValidationError),
-}
-
-impl IntoResponse for CreateTransactionResponse {
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            Self::Created(transaction) => (StatusCode::CREATED, Json(transaction)).into_response(),
-            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
-        }
-    }
-}
-
-impl From<&domain::transactions::Transaction> for CreateTransactionResponse {
-    fn from(transaction: &domain::transactions::Transaction) -> Self {
-        Self::Created(transaction.into())
-    }
-}
-
-impl From<reps::TransactionValidationError> for CreateTransactionResponse {
-    fn from(rep: reps::TransactionValidationError) -> Self {
-        Self::BadRequest(rep)
-    }
-}
-
 async fn create_transaction(
     Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
-    Json(new_transaction): Json<reps::NewTransaction>,
-) -> ApiResponse<CreateTransactionResponse> {
-    let queries = PostgresQueries(db.clone());
-
-    let used_currency_codes = Vec::from_iter(new_transaction.used_currency_codes());
-    let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
-        Ok(currencies) => currencies,
-        Err(error) => {
-            error!(?error, currency_codes = ?new_transaction.used_currency_codes(), "Failed to fetch currencies used in transaction.");
-
-            return Err(ApiError::InternalServerError);
-        }
-    };
-
-    let transaction =
-        match new_transaction.try_into_domain(claims.user_id().to_owned(), used_currencies) {
-            Ok(t) => t,
-            Err(error) => return Ok(error.into()),
-        };
+    Json(new_transaction_data): Json<NewTransactionData>,
+) -> ApiResponse<(StatusCode, Json<reps::Transaction>)> {
+    let new_transaction = NewTransaction::from_data(claims.user_id(), new_transaction_data)?;
 
     let ledger_commands = PostgresCommands(&db);
 
-    let saved_transaction = match ledger_commands.persist_transaction(transaction).await {
+    let saved_transaction = match ledger_commands.persist_transaction(new_transaction).await {
         Ok(t) => t,
         Err(error) => {
             error!(?error, "Failed to persist transaction.");
@@ -362,12 +321,14 @@ async fn create_transaction(
         }
     };
 
-    Ok((&saved_transaction).into())
+    Ok((
+        StatusCode::CREATED,
+        Json(reps::Transaction::from(&saved_transaction)),
+    ))
 }
 
 pub enum UpdateTransactionResponse {
     Updated(reps::Transaction),
-    BadRequest(reps::TransactionValidationError),
     NotFound(ErrorRep),
 }
 
@@ -375,21 +336,8 @@ impl IntoResponse for UpdateTransactionResponse {
     fn into_response(self) -> axum::response::Response {
         match self {
             Self::Updated(transaction) => (StatusCode::OK, Json(transaction)).into_response(),
-            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, Json(error)).into_response(),
             Self::NotFound(error) => (StatusCode::NOT_FOUND, Json(error)).into_response(),
         }
-    }
-}
-
-impl From<&domain::transactions::Transaction> for UpdateTransactionResponse {
-    fn from(transaction: &domain::transactions::Transaction) -> Self {
-        Self::Updated(transaction.into())
-    }
-}
-
-impl From<reps::TransactionValidationError> for UpdateTransactionResponse {
-    fn from(rep: reps::TransactionValidationError) -> Self {
-        Self::BadRequest(rep)
     }
 }
 
@@ -397,30 +345,15 @@ async fn update_transaction(
     Claims(claims): Claims<TokenClaims>,
     State(db): State<PostgresConnection>,
     Path(transaction_id): Path<Uuid>,
-    Json(updated_transaction): Json<reps::NewTransaction>,
+    Json(updated_transaction_data): Json<NewTransactionData>,
 ) -> ApiResponse<UpdateTransactionResponse> {
-    let queries = PostgresQueries(db.clone());
-
-    let used_currency_codes = Vec::from_iter(updated_transaction.used_currency_codes());
-    let used_currencies = match queries.get_currencies_by_code(used_currency_codes).await {
-        Ok(currencies) => currencies,
-        Err(error) => {
-            error!(?error, currency_codes = ?updated_transaction.used_currency_codes(), "Failed to fetch currencies used in transaction.");
-
-            return Err(ApiError::InternalServerError);
-        }
-    };
-
-    let transaction =
-        match updated_transaction.try_into_domain(claims.user_id().to_owned(), used_currencies) {
-            Ok(t) => t,
-            Err(error) => return Ok(error.into()),
-        };
+    let updated_transaction =
+        NewTransaction::from_data(claims.user_id(), updated_transaction_data)?;
 
     let ledger_commands = PostgresCommands(&db);
 
     let saved_transaction = match ledger_commands
-        .update_transaction(transaction_id, transaction)
+        .update_transaction(transaction_id, updated_transaction)
         .await
     {
         Ok(t) => t,
@@ -436,5 +369,7 @@ async fn update_transaction(
         }
     };
 
-    Ok((&saved_transaction).into())
+    Ok(UpdateTransactionResponse::Updated(reps::Transaction::from(
+        &saved_transaction,
+    )))
 }

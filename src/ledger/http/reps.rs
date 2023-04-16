@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
@@ -7,9 +7,7 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use uuid::Uuid;
 
-use crate::ledger::domain::{
-    self, currency::CurrencyParseError, transactions::NewTransactionError,
-};
+use crate::ledger::domain;
 
 #[derive(Serialize)]
 pub struct ResourceCollection<T: Serialize, C: Serialize> {
@@ -28,113 +26,6 @@ impl From<&domain::currency::CurrencyAmount> for CurrencyAmount {
         Self {
             currency: amount.currency().code().to_owned(),
             value: amount.format_value(),
-        }
-    }
-}
-
-#[derive(Deserialize)]
-pub struct NewTransaction {
-    pub date: chrono::NaiveDate,
-    pub payee: String,
-    pub notes: Option<String>,
-    pub entries: Vec<NewTransactionEntry>,
-}
-
-impl NewTransaction {
-    pub fn try_into_domain(
-        &self,
-        user_id: String,
-        currencies: HashMap<String, domain::currency::Currency>,
-    ) -> Result<domain::transactions::NewTransaction, TransactionValidationError> {
-        let mut parsed_entries = Vec::with_capacity(self.entries.len());
-        for new_entry in self.entries.iter() {
-            let parsed_amount = match &new_entry.amount {
-                None => None,
-                Some(amount_rep) => {
-                    if let Some(currency) = currencies.get(&amount_rep.currency) {
-                        Some(domain::currency::CurrencyAmount::from_str(
-                            currency.clone(),
-                            &amount_rep.value,
-                        )?)
-                    } else {
-                        return Err(TransactionValidationError {
-                            message: Some(format!(
-                                "The currency code '{}' is unrecognized.",
-                                &amount_rep.currency
-                            )),
-                        });
-                    }
-                }
-            };
-
-            parsed_entries.push(domain::transactions::NewTransactionEntry {
-                account: new_entry.account.clone(),
-                amount: parsed_amount,
-            });
-        }
-
-        Ok(domain::transactions::NewTransaction::new(
-            user_id,
-            self.date,
-            self.payee.clone(),
-            self.notes.clone(),
-            parsed_entries,
-        )?)
-    }
-
-    pub fn used_currency_codes(&self) -> HashSet<String> {
-        self.entries
-            .iter()
-            .filter_map(|entry| {
-                entry
-                    .amount
-                    .as_ref()
-                    .map(|amount| amount.currency.to_owned())
-            })
-            .collect()
-    }
-}
-
-#[derive(Deserialize)]
-pub struct NewTransactionEntry {
-    pub account: String,
-    pub amount: Option<CurrencyAmount>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TransactionValidationError {
-    pub message: Option<String>,
-}
-
-impl From<CurrencyParseError> for TransactionValidationError {
-    fn from(error: CurrencyParseError) -> Self {
-        match error {
-            CurrencyParseError::InvalidNumber(raw_amount) => Self {
-                message: Some(format!(
-                    "The amount '{}' is not a valid number.",
-                    raw_amount
-                )),
-            },
-            CurrencyParseError::TooManyDecimals(currency, decimals) => Self {
-                message: Some(format!(
-                    "The currency allows {} decimal place(s), but the provided value had {}.",
-                    currency.minor_units(),
-                    decimals
-                )),
-            },
-        }
-    }
-}
-
-impl From<NewTransactionError> for TransactionValidationError {
-    fn from(error: NewTransactionError) -> Self {
-        match error {
-            NewTransactionError::NoEntries => Self {
-                message: Some("The transaction has no entries.".to_owned()),
-            },
-            NewTransactionError::Unbalanced(_) => Self {
-                message: Some("The entries in the transaction are unbalanced.".to_string()),
-            },
         }
     }
 }
