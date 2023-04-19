@@ -32,7 +32,7 @@ sentry = { version = "0.30.0", default-features = false, features = [
     "tracing",
     "transport",
 ] }
-sentry-tracing = { version = "0.30.0" }
+sentry-tracing = { version = "0.31.0" }
 serde = { version = "1.0.160", features = ["derive"] }
 serde_json = { version = "1.0.96" }
 sqlx = { version = "0.6.3", features = [
