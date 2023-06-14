@@ -22,7 +22,7 @@ chrono = { version = "0.4.24", default-features = false, features = [
 ] }
 clap = { version = "4.2.1", features = ["derive", "env"] }
 reqwest = { version = "0.11.16", features = ["json"] }
-sentry = { version = "0.30.0", default-features = false, features = [
+sentry = { version = "0.31.4", default-features = false, features = [
     "anyhow",
     "backtrace",
     "contexts",
